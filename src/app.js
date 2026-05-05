@@ -28,7 +28,7 @@ class TitanBot extends Client {
 
         GatewayIntentBits.GuildBans,
       ],
-      partials: ['USER'] // 🔥 CLAVE PARA DETECTAR CAMBIOS DE AVATAR
+      partials: ['USER']
     });
 
     this.config = config;
@@ -103,66 +103,10 @@ class TitanBot extends Client {
   startWebServer() {
     const app = express();
     const configuredPort = Number(this.config.api?.port || process.env.PORT || 3000);
-    const maxPortRetryAttempts = Number(process.env.PORT_RETRY_ATTEMPTS || 5);
     const host = process.env.WEB_HOST || '0.0.0.0';
-    const corsOrigin = this.config.api?.cors?.origin || '*';
-    
-    app.use((req, res, next) => {
-      const allowedOrigins = Array.isArray(corsOrigin) ? corsOrigin : [corsOrigin];
-      const origin = req.headers.origin;
-      
-      if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-        res.header('Access-Control-Allow-Origin', origin || '*');
-      }
-      res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      
-      if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-      }
-      next();
-    });
-
-    const requestCounts = new Map();
-    const windowMs = 60000; 
-    const maxRequests = this.config.api?.rateLimit?.max || 100;
-    
-    app.use((req, res, next) => {
-      const ip = req.ip;
-      const now = Date.now();
-      const windowStart = now - windowMs;
-      
-      if (!requestCounts.has(ip)) {
-        requestCounts.set(ip, []);
-      }
-      
-      const times = requestCounts.get(ip).filter(t => t > windowStart);
-      
-      if (times.length >= maxRequests) {
-        return res.status(429).json({ error: 'Too many requests' });
-      }
-      
-      times.push(now);
-      requestCounts.set(ip, times);
-      next();
-    });
-
-    app.get('/health', (req, res) => {
-      const dbStatus = this.db?.getStatus?.() || { isDegraded: 'unknown' };
-      res.status(200).json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        database: dbStatus
-      });
-    });
 
     app.get('/', (req, res) => {
-      res.status(200).json({ 
-        message: 'TitanBot System Online',
-        version: '2.0.0',
-        timestamp: new Date().toISOString()
-      });
+      res.json({ message: 'TitanBot Online' });
     });
 
     app.listen(configuredPort, host, () => {
@@ -173,7 +117,24 @@ class TitanBot extends Client {
   setupCronJobs() {
     cron.schedule('0 6 * * *', () => checkBirthdays(this));
     cron.schedule('* * * * *', () => checkGiveaways(this));
-    cron.schedule('*/15 * * * *', () => this.updateAllCounters());
+    cron.schedule('*/15 * * * *', () => this.updateAllCounters()); // 🔥 YA FUNCIONA
+  }
+
+  // 🔥 FIX COMPLETO
+  async updateAllCounters() {
+    try {
+      for (const guild of this.guilds.cache.values()) {
+        const counters = await getServerCounters(this, guild.id);
+
+        for (const counter of counters) {
+          await updateCounter(this, guild, counter);
+        }
+      }
+
+      logger.info('Counters actualizados correctamente');
+    } catch (error) {
+      logger.error('Error updating counters:', error);
+    }
   }
 
   async loadHandlers() {
