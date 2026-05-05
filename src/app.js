@@ -6,9 +6,8 @@ import cron from 'node-cron';
 
 import config from './config/application.js';
 import { initializeDatabase } from './utils/database.js';
-import { getGuildConfig } from './services/guildConfig.js';
-import { getServerCounters, saveServerCounters, updateCounter } from './services/serverstatsService.js';
-import { logger, startupLog, shutdownLog } from './utils/logger.js';
+import { getServerCounters, updateCounter } from './services/serverstatsService.js';
+import { logger, startupLog } from './utils/logger.js';
 import { checkBirthdays } from './services/birthdayService.js';
 import { checkGiveaways } from './services/giveawayService.js';
 import { loadCommands, registerCommands as registerSlashCommands } from './handlers/commandLoader.js';
@@ -22,13 +21,10 @@ class TitanBot extends Client {
       intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
-
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMessageReactions,
         GatewayIntentBits.MessageContent,
-
         GatewayIntentBits.GuildVoiceStates,
-
         GatewayIntentBits.GuildBans,
       ],
       partials: ['USER']
@@ -48,55 +44,33 @@ class TitanBot extends Client {
   async start() {
     try {
       startupLog('Starting TitanBot...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       startupLog('Initializing database...');
       const dbInstance = await initializeDatabase();
       this.db = dbInstance.db;
-      
+
       const dbStatus = this.db.getStatus();
-      if (dbStatus.isDegraded) {
-        logger.warn('');
-        logger.warn('╔═══════════════════════════════════════════════════════╗');
-        logger.warn('║ ⚠️  DATABASE RUNNING IN DEGRADED MODE                 ║');
-        logger.warn('║                                                       ║');
-        logger.warn('║ Connection: In-Memory Storage (PostgreSQL unavailable)║');
-        logger.warn('║ Data Persistence: DISABLED - data lost on restart    ║');
-        logger.warn('║ Action Required: Fix PostgreSQL and restart bot      ║');
-        logger.warn('╚═══════════════════════════════════════════════════════╝');
-        logger.warn('');
-      } else {
-        startupLog(`✅ Database Status: ${dbStatus.connectionType} (fully operational)`);
-      }
-      
-      startupLog('Starting web server...');
+      startupLog(`Database Status: ${dbStatus.connectionType}`);
+
+      // 🔥 WEB SERVER
       this.startWebServer();
-      
+
       startupLog('Loading commands...');
       await loadCommands(this);
-      startupLog(`Commands loaded: ${this.commands.size}`);
-      
+
       startupLog('Loading handlers...');
       await this.loadHandlers();
-      startupLog('Handlers loaded');
-      
+
       startupLog('Logging into Discord...');
       await this.login(this.config.bot.token);
-      startupLog('Discord login successful');
-      
+
       startupLog('Registering slash commands...');
       await this.registerCommands();
-      startupLog('Slash commands registration complete');
-      
-      const databaseMode = dbStatus.isDegraded
-        ? 'Optional in-memory mode (data resets after restart)'
-        : 'Connected (persistent data enabled)';
-      const handlerSummary = `${this.buttons.size} buttons, ${this.selectMenus.size} menus, ${this.modals.size} modals`;
-      startupLog(
-        `ONLINE ✅ | ${this.commands.size} commands loaded | ${handlerSummary} | Database: ${databaseMode}`
-      );
-      
+
+      startupLog(`ONLINE ✅ | ${this.commands.size} commands loaded`);
+
       this.setupCronJobs();
+
     } catch (error) {
       logger.error('Failed to start bot:', error);
       process.exit(1);
@@ -106,18 +80,23 @@ class TitanBot extends Client {
   startWebServer() {
     const app = express();
 
-    // 🔥 ACTIVAR DASHBOARD
+    // 🔥 DASHBOARD PRIMERO
     setupDashboard(app, this);
 
-    const configuredPort = Number(this.config.api?.port || process.env.PORT || 3000);
-    const host = process.env.WEB_HOST || '0.0.0.0';
-
+    // 🔥 ROOT
     app.get('/', (req, res) => {
       res.json({ message: 'TitanBot Online' });
     });
 
-    app.listen(configuredPort, host, () => {
-      startupLog(`Web Server running on ${host}:${configuredPort}`);
+    // 🔥 DEBUG (muy importante)
+    app.get('*', (req, res) => {
+      res.status(404).send(`Ruta no encontrada: ${req.url}`);
+    });
+
+    const PORT = process.env.PORT || 3000;
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Web activa en puerto ${PORT}`);
     });
   }
 
@@ -127,9 +106,7 @@ class TitanBot extends Client {
 
     cron.schedule('*/15 * * * *', async () => {
       try {
-        if (typeof this.updateAllCounters === 'function') {
-          await this.updateAllCounters();
-        }
+        await this.updateAllCounters();
       } catch (err) {
         logger.error('Error en cron counters:', err);
       }
@@ -145,8 +122,6 @@ class TitanBot extends Client {
           await updateCounter(this, guild, counter);
         }
       }
-
-      logger.info('Counters actualizados correctamente');
     } catch (error) {
       logger.error('Error updating counters:', error);
     }
@@ -154,8 +129,8 @@ class TitanBot extends Client {
 
   async loadHandlers() {
     const handlers = [
-      { path: 'events', required: true },
-      { path: 'interactions', required: true }
+      { path: 'events' },
+      { path: 'interactions' }
     ];
 
     for (const handler of handlers) {
