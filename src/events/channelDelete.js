@@ -7,10 +7,65 @@ import {
 } from '../utils/database.js';
 import { getServerCounters, saveServerCounters } from '../services/serverstatsService.js';
 import { logger } from '../utils/logger.js';
+import { sendLog } from '../utils/discordLogger.js'; // 🔥 NUEVO
+import { AuditLogEvent } from 'discord.js'; // 🔥 NUEVO
 
 export default {
     name: 'channelDelete',
     async execute(channel, client) {
+
+        // 🔥 =========================
+        // 🧠 DETECTAR QUIÉN BORRÓ EL CANAL
+        // 🔥 =========================
+        let executor = 'Desconocido';
+
+        try {
+            const fetchedLogs = await channel.guild.fetchAuditLogs({
+                limit: 1,
+                type: AuditLogEvent.ChannelDelete
+            });
+
+            const log = fetchedLogs.entries.first();
+
+            if (
+                log &&
+                log.target.id === channel.id &&
+                Date.now() - log.createdTimestamp < 5000
+            ) {
+                executor = log.executor?.tag || 'Desconocido';
+            }
+
+        } catch (err) {
+            logger.warn('Error leyendo audit logs (channelDelete):', err);
+        }
+
+        // 🔥 LOG A DISCORD (SIEMPRE)
+        try {
+            await sendLog({
+                title: '🗑️ Canal eliminado',
+                description: `${channel.name}`,
+                color: 0xff0000,
+                fields: [
+                    {
+                        name: '🧑‍💼 Eliminado por',
+                        value: executor,
+                        inline: true
+                    },
+                    {
+                        name: '📁 Tipo',
+                        value: channel.type.toString(),
+                        inline: true
+                    }
+                ]
+            });
+        } catch (err) {
+            logger.warn('Error enviando log de canal eliminado:', err);
+        }
+
+        // =========================
+        // 🚫 TODO LO DEMÁS ES TU CÓDIGO (NO TOCADO)
+        // =========================
+
         // Handle ticket text channel deletion
         if (channel.type === 0 && channel.guild) {
             try {
@@ -26,7 +81,7 @@ export default {
             }
         }
 
-if (channel.type !== 2 && channel.type !== 4) {
+        if (channel.type !== 2 && channel.type !== 4) {
             return;
         }
 
