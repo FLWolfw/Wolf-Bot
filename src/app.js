@@ -13,6 +13,9 @@ import { checkBirthdays } from './services/birthdayService.js';
 import { checkGiveaways } from './services/giveawayService.js';
 import { loadCommands, registerCommands as registerSlashCommands } from './handlers/commandLoader.js';
 
+// 🔥 DASHBOARD
+import { setupDashboard } from './dashboard/index.js';
+
 class TitanBot extends Client {
   constructor() {
     super({
@@ -102,6 +105,10 @@ class TitanBot extends Client {
 
   startWebServer() {
     const app = express();
+
+    // 🔥 ACTIVAR DASHBOARD
+    setupDashboard(app, this);
+
     const configuredPort = Number(this.config.api?.port || process.env.PORT || 3000);
     const host = process.env.WEB_HOST || '0.0.0.0';
 
@@ -118,13 +125,10 @@ class TitanBot extends Client {
     cron.schedule('0 6 * * *', () => checkBirthdays(this));
     cron.schedule('* * * * *', () => checkGiveaways(this));
 
-    // 🔥 FIX TOTAL (NO MÁS ERROR)
     cron.schedule('*/15 * * * *', async () => {
       try {
         if (typeof this.updateAllCounters === 'function') {
           await this.updateAllCounters();
-        } else {
-          logger.warn('updateAllCounters no existe (skip)');
         }
       } catch (err) {
         logger.error('Error en cron counters:', err);
