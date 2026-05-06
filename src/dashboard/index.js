@@ -635,59 +635,111 @@ export function setupDashboard(app, client) {
 
             </div>
 
-            <!-- LOGS -->
+            <!-- ADVANCED LOGS -->
 
             <div class="card">
 
-              <h2>
-                📊 Logs
-              </h2>
+              <h2>📊 Advanced Logs</h2>
 
               <p>
-
                 ${
                   config.logs?.enabled
                     ? '🟢 Enabled'
                     : '🔴 Disabled'
                 }
-
               </p>
 
-              <form
-                method="POST"
-                action="/server/${serverId}/logs/toggle"
-              >
+              <!-- TOGGLE -->
 
+              <form method="POST" action="/server/${serverId}/logs/toggle">
                 <button>
-
-                  ${
-                    config.logs?.enabled
-                      ? 'Disable Logs'
-                      : 'Enable Logs'
-                  }
-
+                  ${config.logs?.enabled ? 'Disable Logs' : 'Enable Logs'}
                 </button>
+              </form>
+
+              <br>
+
+              <!-- MODE -->
+
+              <form method="POST" action="/server/${serverId}/logs/mode">
+
+                <select name="mode">
+
+                  <option value="single" ${config.logs?.mode === 'single' ? 'selected' : ''}>
+                    Single Channel
+                  </option>
+
+                  <option value="advanced" ${config.logs?.mode === 'advanced' ? 'selected' : ''}>
+                    Advanced Categories
+                  </option>
+
+                </select>
+
+                <button>Save Mode</button>
 
               </form>
 
               <br>
 
-              <form
-                method="POST"
-                action="/server/${serverId}/logs/channel"
-              >
+              ${
+                config.logs?.mode !== 'advanced'
+                  ? `
+                  <form method="POST" action="/server/${serverId}/logs/channel">
 
-                <select name="channel">
+                    <select name="channel">
+                      ${channels}
+                    </select>
 
-                  ${channels}
+                    <button>Save Channel</button>
 
-                </select>
+                  </form>
+                  `
+                  : ''
+              }
 
-                <button>
-                  Save Channel
-                </button>
+              ${
+                config.logs?.mode === 'advanced'
+                  ? `
+                  <div>
 
-              </form>
+                    ${[
+                      'message',
+                      'member',
+                      'moderation',
+                      'voice',
+                      'role',
+                      'channel'
+                    ].map(type => `
+
+                      <form method="POST" action="/server/${serverId}/logs/category">
+
+                        <input type="hidden" name="category" value="${type}">
+
+                        <p style="margin-top:10px;">📂 ${type}</p>
+
+                        <select name="channel">
+
+                          ${guild.channels.cache
+                            .filter(c => c.type === 0)
+                            .map(c => `
+                              <option value="${c.id}"
+                                ${config.logs?.categories?.[type] === c.id ? 'selected' : ''}>
+                                #${c.name}
+                              </option>
+                            `).join('')}
+
+                        </select>
+
+                        <button>Save</button>
+
+                      </form>
+
+                    `).join('')}
+
+                  </div>
+                  `
+                  : ''
+              }
 
             </div>
 
@@ -870,6 +922,34 @@ export function setupDashboard(app, client) {
     );
 
   });
+  // 📂 MODE
+
+app.post('/server/:id/logs/mode', async (req, res) => {
+
+  const serverId = req.params.id;
+
+  const { updateLogMode } =
+    await import('../services/guildConfigService.js');
+
+  await updateLogMode(client.db, serverId, req.body.mode);
+
+  res.redirect(`/server/${serverId}`);
+});
+
+// 📂 CATEGORY
+
+app.post('/server/:id/logs/category', async (req, res) => {
+
+  const serverId = req.params.id;
+  const { category, channel } = req.body;
+
+  const { updateLogCategory } =
+    await import('../services/guildConfigService.js');
+
+  await updateLogCategory(client.db, serverId, category, channel);
+
+  res.redirect(`/server/${serverId}`);
+});
 
   // =====================================
   // 🚪 LOGOUT
