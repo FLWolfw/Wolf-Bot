@@ -105,29 +105,87 @@ export default {
       }
 
       // =====================================
-      // 📊 LOG MEMBER JOIN (ADVANCED)
-      // =====================================
+// 📊 LOG MEMBER JOIN (FORZADO ADVANCED)
+// =====================================
 
-      try {
+try {
 
-        if (!config.logs?.enabled) return;
+  if (!config.logs?.enabled) return;
 
-        let logChannel = null;
+  let logChannel = null;
 
-        // 🔥 MODO AVANZADO
-        if (config.logs.mode === 'advanced') {
+  // 🔥 PRIORIDAD 1 → CATEGORY (SIEMPRE)
+  if (config.logs.categories?.member) {
 
-          const categoryChannel =
-            config.logs.categories?.member;
+    logChannel =
+      guild.channels.cache.get(
+        config.logs.categories.member
+      );
 
-          if (categoryChannel) {
-            logChannel =
-              guild.channels.cache.get(
-                categoryChannel
-              );
-          }
+  }
 
-        }
+  // 🔥 PRIORIDAD 2 → SINGLE
+  if (!logChannel && config.logs.channel) {
+
+    logChannel =
+      guild.channels.cache.get(
+        config.logs.channel
+      );
+
+  }
+
+  if (!logChannel) return;
+
+  const embed = {
+
+    color: 0x00ffcc,
+
+    title: '👤 Member Joined',
+
+    description: `${user} joined the server`,
+
+    fields: [
+
+      {
+        name: 'User',
+        value: `${user.tag} (${user.id})`,
+        inline: true
+      },
+
+      {
+        name: 'Members',
+        value: guild.memberCount.toString(),
+        inline: true
+      },
+
+      {
+        name: 'Created',
+        value: `<t:${Math.floor(user.createdTimestamp / 1000)}:R>`,
+        inline: true
+      }
+
+    ],
+
+    thumbnail: {
+      url: user.displayAvatarURL({ dynamic: true })
+    },
+
+    timestamp: new Date()
+
+  };
+
+  await logChannel.send({
+    embeds: [embed]
+  });
+
+} catch (error) {
+
+  logger.debug(
+    'Error logging member join:',
+    error
+  );
+
+}
 
         // 🔥 MODO NORMAL (fallback)
         if (!logChannel && config.logs.channel) {
