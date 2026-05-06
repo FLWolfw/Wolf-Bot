@@ -148,10 +148,8 @@ export async function logEvent({
 
     const config = await getGuildConfig(client.db, guildId);
 
-    // 🔥 LOGS APAGADOS
     if (!config.logging_enabled) return;
 
-    // 🔥 CANAL LOGS
     const logChannelId = config.log_channel;
 
     if (!logChannelId) return;
@@ -235,7 +233,7 @@ function formatEventType(eventType) {
     .join(' ');
 }
 
-// 🔥 COMPATIBILIDAD
+// 🔥 STATUS
 export async function getLoggingStatus(client, guildId) {
 
   const config = await getGuildConfig(
@@ -253,6 +251,24 @@ export async function getLoggingStatus(client, guildId) {
     allEventTypes:
       EVENT_TYPES
   };
+}
+
+// 🔥 TOGGLE LOGS
+export async function setLoggingEnabled(client, guildId, enabled) {
+
+  const config = await getGuildConfig(
+    client.db,
+    guildId
+  );
+
+  config.logging_enabled = enabled;
+
+  await client.db.set(
+    `guild:${guildId}:config`,
+    config
+  );
+
+  return config;
 }
 
 export {
