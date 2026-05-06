@@ -9,6 +9,7 @@ export function setupDashboard(app, client) {
   app.use(express.urlencoded({ extended: true }));
 
   app.use(session({
+
     secret:
       process.env.SESSION_SECRET ||
       'wk-secret',
@@ -16,6 +17,7 @@ export function setupDashboard(app, client) {
     resave: false,
 
     saveUninitialized: false
+
   }));
 
   // =====================================
@@ -25,6 +27,7 @@ export function setupDashboard(app, client) {
   app.get('/login', (req, res) => {
 
     const url =
+
       `https://discord.com/api/oauth2/authorize?client_id=${process.env.CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.REDIRECT_URI)}&response_type=code&scope=identify%20guilds`;
 
     res.redirect(url);
@@ -43,6 +46,7 @@ export function setupDashboard(app, client) {
     try {
 
       const tokenRes =
+
         await axios.post(
 
           'https://discord.com/api/oauth2/token',
@@ -66,9 +70,12 @@ export function setupDashboard(app, client) {
           }),
 
           {
+
             headers: {
+
               'Content-Type':
                 'application/x-www-form-urlencoded'
+
             }
           }
         );
@@ -77,23 +84,31 @@ export function setupDashboard(app, client) {
         tokenRes.data.access_token;
 
       const userRes =
+
         await axios.get(
           'https://discord.com/api/users/@me',
           {
+
             headers: {
+
               Authorization:
                 `Bearer ${accessToken}`
+
             }
           }
         );
 
       const guildsRes =
+
         await axios.get(
           'https://discord.com/api/users/@me/guilds',
           {
+
             headers: {
+
               Authorization:
                 `Bearer ${accessToken}`
+
             }
           }
         );
@@ -138,17 +153,20 @@ export function setupDashboard(app, client) {
       req.session.guilds || [];
 
     const adminGuilds =
+
       guilds.filter(
         g =>
           (g.permissions & 0x8) === 0x8
       );
 
     const botGuildIds =
+
       client.guilds.cache.map(
         g => g.id
       );
 
     const filteredGuilds =
+
       adminGuilds.filter(
         g =>
           botGuildIds.includes(
@@ -219,6 +237,7 @@ export function setupDashboard(app, client) {
 
       </html>
     `);
+
   });
 
   // =====================================
@@ -239,24 +258,30 @@ export function setupDashboard(app, client) {
       req.params.id;
 
     const {
+
       getGuildConfig
+
     } =
+
       await import(
         '../services/guildConfigService.js'
       );
 
     const config =
+
       await getGuildConfig(
         client.db,
         serverId
       );
 
     const guild =
+
       client.guilds.cache.get(
         serverId
       );
 
     const channels =
+
       guild.channels.cache
 
         .filter(
@@ -288,6 +313,68 @@ export function setupDashboard(app, client) {
           <h1>
             ${guild.name}
           </h1>
+
+          <!-- ================================= -->
+          <!-- 🌎 LANGUAGE -->
+          <!-- ================================= -->
+
+          <h2>
+            🌎 Language
+          </h2>
+
+          <p>
+
+            Current:
+            <b>
+              ${config.language}
+            </b>
+
+          </p>
+
+          <form
+            method="POST"
+            action="/server/${serverId}/language"
+          >
+
+            <select name="language">
+
+              <option
+                value="es"
+
+                ${
+                  config.language === 'es'
+                    ? 'selected'
+                    : ''
+                }
+              >
+
+                Español
+
+              </option>
+
+              <option
+                value="en"
+
+                ${
+                  config.language === 'en'
+                    ? 'selected'
+                    : ''
+                }
+              >
+
+                English
+
+              </option>
+
+            </select>
+
+            <button>
+              Save Language
+            </button>
+
+          </form>
+
+          <hr>
 
           <!-- ================================= -->
           <!-- 👋 WELCOME -->
@@ -446,6 +533,42 @@ export function setupDashboard(app, client) {
 
       </html>
     `);
+
+  });
+
+  // =====================================
+  // 🌎 LANGUAGE
+  // =====================================
+
+  app.post('/server/:id/language', async (req, res) => {
+
+    const serverId =
+      req.params.id;
+
+    const {
+
+      updateLanguage
+
+    } =
+
+      await import(
+        '../services/guildConfigService.js'
+      );
+
+    await updateLanguage(
+
+      client.db,
+
+      serverId,
+
+      req.body.language
+
+    );
+
+    res.redirect(
+      `/server/${serverId}`
+    );
+
   });
 
   // =====================================
@@ -458,14 +581,18 @@ export function setupDashboard(app, client) {
       req.params.id;
 
     const {
+
       getGuildConfig,
       updateWelcome
+
     } =
+
       await import(
         '../services/guildConfigService.js'
       );
 
     const config =
+
       await getGuildConfig(
         client.db,
         serverId
@@ -484,6 +611,7 @@ export function setupDashboard(app, client) {
     res.redirect(
       `/server/${serverId}`
     );
+
   });
 
   // =====================================
@@ -496,8 +624,11 @@ export function setupDashboard(app, client) {
       req.params.id;
 
     const {
+
       updateWelcomeChannel
+
     } =
+
       await import(
         '../services/guildConfigService.js'
       );
@@ -515,6 +646,7 @@ export function setupDashboard(app, client) {
     res.redirect(
       `/server/${serverId}`
     );
+
   });
 
   // =====================================
@@ -527,8 +659,11 @@ export function setupDashboard(app, client) {
       req.params.id;
 
     const {
+
       updateWelcomeMessage
+
     } =
+
       await import(
         '../services/guildConfigService.js'
       );
@@ -546,6 +681,7 @@ export function setupDashboard(app, client) {
     res.redirect(
       `/server/${serverId}`
     );
+
   });
 
   // =====================================
@@ -558,14 +694,18 @@ export function setupDashboard(app, client) {
       req.params.id;
 
     const {
+
       getGuildConfig,
       updateLogging
+
     } =
+
       await import(
         '../services/guildConfigService.js'
       );
 
     const config =
+
       await getGuildConfig(
         client.db,
         serverId
@@ -584,6 +724,7 @@ export function setupDashboard(app, client) {
     res.redirect(
       `/server/${serverId}`
     );
+
   });
 
   // =====================================
@@ -596,8 +737,11 @@ export function setupDashboard(app, client) {
       req.params.id;
 
     const {
+
       updateLogChannel
+
     } =
+
       await import(
         '../services/guildConfigService.js'
       );
@@ -615,6 +759,7 @@ export function setupDashboard(app, client) {
     res.redirect(
       `/server/${serverId}`
     );
+
   });
 
   // =====================================
