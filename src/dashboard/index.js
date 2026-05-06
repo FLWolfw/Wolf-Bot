@@ -1,12 +1,33 @@
 import session from 'express-session';
 import axios from 'axios';
 import express from 'express';
+import path from 'path';
 
 export function setupDashboard(app, client) {
 
   console.log('🔥 Dashboard cargado');
 
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.urlencoded({
+    extended: true
+  }));
+
+  // =====================================
+  // 🎨 STATIC FILES
+  // =====================================
+
+  app.use(
+    '/assets',
+    express.static(
+      path.join(
+        process.cwd(),
+        'src/dashboard/public'
+      )
+    )
+  );
+
+  // =====================================
+  // 🔐 SESSION
+  // =====================================
 
   app.use(session({
 
@@ -21,7 +42,7 @@ export function setupDashboard(app, client) {
   }));
 
   // =====================================
-  // 🔐 LOGIN DISCORD
+  // 🔐 LOGIN
   // =====================================
 
   app.get('/login', (req, res) => {
@@ -175,73 +196,100 @@ export function setupDashboard(app, client) {
       );
 
     res.send(`
+
       <html>
 
-        <body style="
-          background:#111;
-          color:white;
-          font-family:Arial;
-          padding:20px;
-        ">
+        <head>
 
-          <h1>
-            WK' Bot Dashboard
-          </h1>
-
-          <img
-            src="https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png"
-            width="80"
-            style="border-radius:50%"
+          <link
+            rel="stylesheet"
+            href="/assets/style.css"
           >
 
-          <p>
-            Usuario:
-            ${user.username}
-          </p>
+        </head>
 
-          <h2>
-            Servidores
-          </h2>
+        <body>
 
-          <ul>
+          <div class="sidebar">
 
-            ${filteredGuilds.map(g => `
+            <h1>
+              WK'
+            </h1>
 
-              <li>
+            <a href="/dashboard">
+              🏠 Dashboard
+            </a>
 
-                <a
-                  href="/server/${g.id}"
-                  style="color:#00ffcc;"
+            <a href="/logout">
+              🚪 Logout
+            </a>
+
+          </div>
+
+          <div class="main">
+
+            <div class="card">
+
+              <img
+                src="https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png"
+                width="90"
+                style="
+                  border-radius:50%;
+                "
+              >
+
+              <h2>
+                ${user.username}
+              </h2>
+
+            </div>
+
+            <div class="card">
+
+              <h2>
+                🌎 Servidores
+              </h2>
+
+              ${filteredGuilds.map(g => `
+
+                <div
+                  style="
+                    margin-top:15px;
+                  "
                 >
 
-                  ${g.name}
+                  <a
+                    href="/server/${g.id}"
 
-                </a>
+                    style="
+                      color:#00ffcc;
+                      font-size:18px;
+                      text-decoration:none;
+                    "
+                  >
 
-              </li>
+                    ${g.name}
 
-            `).join('')}
+                  </a>
 
-          </ul>
+                </div>
 
-          <br>
+              `).join('')}
 
-          <a
-            href="/logout"
-            style="color:red;"
-          >
-            Cerrar sesión
-          </a>
+            </div>
+
+          </div>
 
         </body>
 
       </html>
+
     `);
 
   });
 
   // =====================================
-  // 🧠 PANEL SERVER
+  // 🧠 SERVER PANEL
   // =====================================
 
   app.get('/server/:id', async (req, res) => {
@@ -301,237 +349,258 @@ export function setupDashboard(app, client) {
         .join('');
 
     res.send(`
+
       <html>
 
-        <body style="
-          background:#111;
-          color:white;
-          font-family:Arial;
-          padding:20px;
-        ">
+        <head>
 
-          <h1>
-            ${guild.name}
-          </h1>
-
-          <!-- ================================= -->
-          <!-- 🌎 LANGUAGE -->
-          <!-- ================================= -->
-
-          <h2>
-            🌎 Language
-          </h2>
-
-          <p>
-
-            Current:
-            <b>
-              ${config.language}
-            </b>
-
-          </p>
-
-          <form
-            method="POST"
-            action="/server/${serverId}/language"
+          <link
+            rel="stylesheet"
+            href="/assets/style.css"
           >
 
-            <select name="language">
+        </head>
 
-              <option
-                value="es"
+        <body>
 
-                ${
-                  config.language === 'es'
-                    ? 'selected'
-                    : ''
-                }
+          <div class="sidebar">
+
+            <h1>
+              WK'
+            </h1>
+
+            <a href="/dashboard">
+              🏠 Dashboard
+            </a>
+
+            <a href="/logout">
+              🚪 Logout
+            </a>
+
+          </div>
+
+          <div class="main">
+
+            <div class="card">
+
+              <h1>
+                ${guild.name}
+              </h1>
+
+            </div>
+
+            <!-- 🌎 LANGUAGE -->
+
+            <div class="card">
+
+              <h2>
+                🌎 Language
+              </h2>
+
+              <p>
+                Current:
+                <b>
+                  ${config.language}
+                </b>
+              </p>
+
+              <form
+                method="POST"
+                action="/server/${serverId}/language"
               >
 
-                Español
+                <select name="language">
 
-              </option>
+                  <option
+                    value="es"
 
-              <option
-                value="en"
+                    ${
+                      config.language === 'es'
+                        ? 'selected'
+                        : ''
+                    }
+                  >
+
+                    Español
+
+                  </option>
+
+                  <option
+                    value="en"
+
+                    ${
+                      config.language === 'en'
+                        ? 'selected'
+                        : ''
+                    }
+                  >
+
+                    English
+
+                  </option>
+
+                </select>
+
+                <button>
+                  Save
+                </button>
+
+              </form>
+
+            </div>
+
+            <!-- 👋 WELCOME -->
+
+            <div class="card">
+
+              <h2>
+                👋 Welcome
+              </h2>
+
+              <p>
 
                 ${
-                  config.language === 'en'
-                    ? 'selected'
-                    : ''
+                  config.welcome?.enabled
+
+                    ? '🟢 Enabled'
+
+                    : '🔴 Disabled'
                 }
+
+              </p>
+
+              <form
+                method="POST"
+                action="/server/${serverId}/welcome"
               >
 
-                English
+                <button>
 
-              </option>
+                  ${
+                    config.welcome?.enabled
 
-            </select>
+                      ? 'Disable'
 
-            <button>
-              Save Language
-            </button>
+                      : 'Enable'
+                  }
 
-          </form>
+                </button>
 
-          <hr>
+              </form>
 
-          <!-- ================================= -->
-          <!-- 👋 WELCOME -->
-          <!-- ================================= -->
+              <br>
 
-          <h2>
-            Welcome
-          </h2>
+              <form
+                method="POST"
+                action="/server/${serverId}/channel"
+              >
 
-          <p>
+                <select name="channel">
 
-            ${
-              config.welcome?.enabled
+                  ${channels}
 
-                ? '🟢 Activado'
+                </select>
 
-                : '🔴 Desactivado'
-            }
+                <button>
+                  Save Channel
+                </button>
 
-          </p>
+              </form>
 
-          <form
-            method="POST"
-            action="/server/${serverId}/welcome"
-          >
+              <br>
 
-            <button>
+              <form
+                method="POST"
+                action="/server/${serverId}/message"
+              >
 
-              ${
-                config.welcome?.enabled
+                <input
+                  type="text"
+                  name="message"
 
-                  ? 'Desactivar'
+                  value="${
+                    config.welcome?.message || ''
+                  }"
 
-                  : 'Activar'
-              }
+                  style="
+                    width:300px;
+                  "
+                >
 
-            </button>
+                <button>
+                  Save Message
+                </button>
 
-          </form>
+              </form>
 
-          <br>
+            </div>
 
-          <form
-            method="POST"
-            action="/server/${serverId}/channel"
-          >
+            <!-- 📊 LOGS -->
 
-            <select name="channel">
+            <div class="card">
 
-              ${channels}
+              <h2>
+                📊 Logs
+              </h2>
 
-            </select>
+              <p>
 
-            <button>
-              Guardar canal welcome
-            </button>
+                ${
+                  config.logs?.enabled
 
-          </form>
+                    ? '🟢 Enabled'
 
-          <br>
+                    : '🔴 Disabled'
+                }
 
-          <form
-            method="POST"
-            action="/server/${serverId}/message"
-          >
+              </p>
 
-            <input
-              type="text"
-              name="message"
+              <form
+                method="POST"
+                action="/server/${serverId}/logs/toggle"
+              >
 
-              value="${
-                config.welcome?.message || ''
-              }"
+                <button>
 
-              style="width:300px;"
-            >
+                  ${
+                    config.logs?.enabled
 
-            <button>
-              Guardar mensaje
-            </button>
+                      ? 'Disable Logs'
 
-          </form>
+                      : 'Enable Logs'
+                  }
 
-          <p>
-            Variables:
-            {user}, {server}
-          </p>
+                </button>
 
-          <hr>
+              </form>
 
-          <!-- ================================= -->
-          <!-- 📊 LOGS -->
-          <!-- ================================= -->
+              <br>
 
-          <h2>
-            Logs
-          </h2>
+              <form
+                method="POST"
+                action="/server/${serverId}/logs/channel"
+              >
 
-          <p>
+                <select name="channel">
 
-            ${
-              config.logs?.enabled
+                  ${channels}
 
-                ? '🟢 Activados'
+                </select>
 
-                : '🔴 Desactivados'
-            }
+                <button>
+                  Save Channel
+                </button>
 
-          </p>
+              </form>
 
-          <form
-            method="POST"
-            action="/server/${serverId}/logs/toggle"
-          >
+            </div>
 
-            <button>
-
-              ${
-                config.logs?.enabled
-
-                  ? 'Desactivar Logs'
-
-                  : 'Activar Logs'
-              }
-
-            </button>
-
-          </form>
-
-          <br>
-
-          <form
-            method="POST"
-            action="/server/${serverId}/logs/channel"
-          >
-
-            <select name="channel">
-
-              ${channels}
-
-            </select>
-
-            <button>
-              Guardar canal logs
-            </button>
-
-          </form>
-
-          <br><br>
-
-          <a href="/dashboard">
-            ⬅ Volver
-          </a>
+          </div>
 
         </body>
 
       </html>
+
     `);
 
   });
@@ -572,7 +641,7 @@ export function setupDashboard(app, client) {
   });
 
   // =====================================
-  // 👋 TOGGLE WELCOME
+  // 👋 WELCOME
   // =====================================
 
   app.post('/server/:id/welcome', async (req, res) => {
@@ -614,10 +683,6 @@ export function setupDashboard(app, client) {
 
   });
 
-  // =====================================
-  // 👋 CANAL WELCOME
-  // =====================================
-
   app.post('/server/:id/channel', async (req, res) => {
 
     const serverId =
@@ -648,10 +713,6 @@ export function setupDashboard(app, client) {
     );
 
   });
-
-  // =====================================
-  // 👋 MENSAJE WELCOME
-  // =====================================
 
   app.post('/server/:id/message', async (req, res) => {
 
@@ -685,7 +746,7 @@ export function setupDashboard(app, client) {
   });
 
   // =====================================
-  // 📊 TOGGLE LOGS
+  // 📊 LOGS
   // =====================================
 
   app.post('/server/:id/logs/toggle', async (req, res) => {
@@ -726,10 +787,6 @@ export function setupDashboard(app, client) {
     );
 
   });
-
-  // =====================================
-  // 📊 CANAL LOGS
-  // =====================================
 
   app.post('/server/:id/logs/channel', async (req, res) => {
 

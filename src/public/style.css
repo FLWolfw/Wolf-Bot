@@ -1,0 +1,111 @@
+body {
+
+  margin: 0;
+  padding: 0;
+
+  background: #0f0f0f;
+  color: white;
+
+  font-family: Arial, sans-serif;
+}
+
+.sidebar {
+
+  width: 220px;
+  height: 100vh;
+
+  background: #161616;
+
+  position: fixed;
+
+  left: 0;
+  top: 0;
+
+  padding: 20px;
+
+  border-right:
+    1px solid #2a2a2a;
+}
+
+.sidebar h1 {
+
+  color: #00ffcc;
+  font-size: 24px;
+}
+
+.sidebar a {
+
+  display: block;
+
+  color: white;
+
+  text-decoration: none;
+
+  margin-top: 20px;
+
+  transition: 0.2s;
+}
+
+.sidebar a:hover {
+
+  color: #00ffcc;
+}
+
+.main {
+
+  margin-left: 240px;
+  padding: 30px;
+}
+
+.card {
+
+  background: #181818;
+
+  border:
+    1px solid #2a2a2a;
+
+  border-radius: 16px;
+
+  padding: 20px;
+
+  margin-bottom: 20px;
+}
+
+button {
+
+  background: #00ffcc;
+
+  color: black;
+
+  border: none;
+
+  padding: 10px 18px;
+
+  border-radius: 10px;
+
+  cursor: pointer;
+
+  font-weight: bold;
+
+  transition: 0.2s;
+}
+
+button:hover {
+
+  transform: scale(1.03);
+}
+
+input,
+select {
+
+  background: #111;
+
+  color: white;
+
+  border:
+    1px solid #333;
+
+  padding: 10px;
+
+  border-radius: 10px;
+}
