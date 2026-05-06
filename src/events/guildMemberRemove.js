@@ -10,7 +10,10 @@ import {
 } from '../config/bot.js';
 
 import {
-  getWelcomeConfig,
+  getGuildConfig
+} from '../services/guildConfigService.js';
+
+import {
   getUserApplications,
   deleteApplication
 } from '../utils/database.js';
@@ -57,7 +60,10 @@ export default {
         user
       } = member;
 
+      // =====================================
       // 🔥 DETECTAR KICK
+      // =====================================
+
       let wasKicked = false;
 
       let executor =
@@ -95,32 +101,58 @@ export default {
             log.reason ||
             'No reason provided';
 
-          // 🔥 NUEVO SISTEMA
+          // 🔥 LOG KICK
           await logEvent({
-            client: member.client,
-            guildId: guild.id,
-            eventType: EVENT_TYPES.MEMBER_KICK,
+
+            client:
+              member.client,
+
+            guildId:
+              guild.id,
+
+            eventType:
+              EVENT_TYPES.MODERATION_KICK,
+
             data: {
+
               description:
                 `${user.tag} was kicked`,
-              userId: user.id,
+
+              userId:
+                user.id,
+
               fields: [
+
                 {
-                  name: '👤 User',
+                  name:
+                    '👤 User',
+
                   value:
                     `${user.tag} (${user.id})`,
+
                   inline: true
                 },
+
                 {
-                  name: '🛡️ Moderator',
-                  value: executor,
+                  name:
+                    '🛡️ Moderator',
+
+                  value:
+                    executor,
+
                   inline: true
                 },
+
                 {
-                  name: '📄 Reason',
-                  value: reason,
+                  name:
+                    '📄 Reason',
+
+                  value:
+                    reason,
+
                   inline: false
                 }
+
               ]
             }
           });
@@ -136,26 +168,27 @@ export default {
 
       }
 
+      // =====================================
       // 👋 LEAVE NORMAL
+      // =====================================
+
       if (!wasKicked) {
 
-        const welcomeConfig =
-          await getWelcomeConfig(
-            member.client,
+        const config =
+          await getGuildConfig(
+            member.client.db,
             guild.id
           );
 
-        const goodbyeChannelId =
-          welcomeConfig?.goodbyeChannelId;
-
+        // 🔥 GOODBYE USANDO NUEVA CONFIG
         if (
-          welcomeConfig?.goodbyeEnabled &&
-          goodbyeChannelId
+          config.welcome?.enabled &&
+          config.welcome?.channel
         ) {
 
           const channel =
             guild.channels.cache.get(
-              goodbyeChannelId
+              config.welcome.channel
             );
 
           if (
@@ -171,93 +204,132 @@ export default {
                 : null;
 
             if (
-              !permissions?.has([
+              permissions?.has([
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages
               ])
             ) {
 
-              return;
+              const formatData = {
+                user,
+                guild,
+                member
+              };
+
+              const goodbyeMessage =
+                formatWelcomeMessage(
+
+                  config.welcome.message ||
+
+                  '{user.tag} left the server.',
+
+                  formatData
+                );
+
+              const embed =
+                new EmbedBuilder()
+
+                  .setTitle(
+                    '👋 Goodbye'
+                  )
+
+                  .setDescription(
+                    goodbyeMessage
+                  )
+
+                  .setColor(
+                    getColor('error')
+                  )
+
+                  .setThumbnail(
+                    user.displayAvatarURL()
+                  )
+
+                  .addFields(
+
+                    {
+                      name: 'User',
+
+                      value:
+                        `${user.tag} (${user.id})`,
+
+                      inline: true
+                    },
+
+                    {
+                      name:
+                        'Member Count',
+
+                      value:
+                        guild.memberCount.toString(),
+
+                      inline: true
+                    }
+
+                  )
+
+                  .setTimestamp();
+
+              await channel.send({
+                embeds: [embed]
+              });
 
             }
-
-            const formatData = {
-              user,
-              guild,
-              member
-            };
-
-            const goodbyeMessage =
-              formatWelcomeMessage(
-                welcomeConfig.leaveMessage ||
-                '{user.tag} has left the server.',
-                formatData
-              );
-
-            const embed =
-              new EmbedBuilder()
-                .setTitle('👋 Goodbye')
-                .setDescription(
-                  goodbyeMessage
-                )
-                .setColor(
-                  getColor('error')
-                )
-                .setThumbnail(
-                  user.displayAvatarURL()
-                )
-                .addFields(
-                  {
-                    name: 'User',
-                    value:
-                      `${user.tag} (${user.id})`,
-                    inline: true
-                  },
-                  {
-                    name: 'Member Count',
-                    value:
-                      guild.memberCount.toString(),
-                    inline: true
-                  }
-                )
-                .setTimestamp();
-
-            await channel.send({
-              embeds: [embed]
-            });
-
           }
         }
 
-        // 🔥 NUEVO SISTEMA
+        // 🔥 LOG LEAVE
         await logEvent({
-          client: member.client,
-          guildId: guild.id,
-          eventType: EVENT_TYPES.MEMBER_LEAVE,
+
+          client:
+            member.client,
+
+          guildId:
+            guild.id,
+
+          eventType:
+            EVENT_TYPES.MEMBER_LEAVE,
+
           data: {
+
             description:
               `${user.tag} left the server`,
-            userId: user.id,
+
+            userId:
+              user.id,
+
             fields: [
+
               {
-                name: '👤 Member',
+                name:
+                  '👤 Member',
+
                 value:
                   `${user.tag} (${user.id})`,
+
                 inline: true
               },
+
               {
-                name: '👥 Member Count',
+                name:
+                  '👥 Member Count',
+
                 value:
                   guild.memberCount.toString(),
+
                 inline: true
               }
+
             ]
           }
         });
 
       }
 
+      // =====================================
       // 🔁 CONTADORES
+      // =====================================
+
       try {
 
         const counters =
@@ -295,7 +367,10 @@ export default {
 
       }
 
+      // =====================================
       // 🎂 BIRTHDAYS
+      // =====================================
+
       try {
 
         const birthdays =
@@ -343,7 +418,10 @@ export default {
 
       }
 
+      // =====================================
       // 📄 APPLICATIONS
+      // =====================================
+
       try {
 
         const userApplications =
@@ -381,7 +459,10 @@ export default {
 
       }
 
+      // =====================================
       // 📈 LEVELING
+      // =====================================
+
       try {
 
         await deleteUserLevelData(
