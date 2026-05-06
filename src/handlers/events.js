@@ -1,4 +1,4 @@
-import { readdir } from 'fs/promises';
+import { readdir, stat } from 'fs/promises';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -11,7 +11,6 @@ export default async function loadEvents(client) {
 
   const eventsPath = join(__dirname, '../events');
 
-  // 🔥 FUNCIÓN RECURSIVA (CLAVE)
   async function load(dir) {
 
     const files = await readdir(dir);
@@ -19,30 +18,30 @@ export default async function loadEvents(client) {
     for (const file of files) {
 
       const filePath = join(dir, file);
+      const fileStat = await stat(filePath);
 
-      const stat = await import('fs/promises').then(fs => fs.stat(filePath));
+      if (fileStat.isDirectory()) {
 
-      if (stat.isDirectory()) {
-
-        // 🔥 entra en subcarpetas (logs)
+        // 🔥 entra en /logs
         await load(filePath);
 
       } else if (file.endsWith('.js')) {
 
         try {
 
-          const { default: event } = await import(`file://${filePath}`);
+          const { default: event } =
+            await import(`file://${filePath}`);
 
           if (!event?.name || typeof event.execute !== 'function') {
-            logger.warn(`Event ${file} missing "name" or "execute".`);
+            logger.warn(`Event ${file} inválido`);
             continue;
           }
 
           const safeExecute = async (...args) => {
             try {
-              await event.execute(...args, client);
+              await event.execute(...args);
             } catch (error) {
-              logger.error(`Error executing event ${event.name}:`, error);
+              logger.error(`Error en ${event.name}:`, error);
             }
           };
 
@@ -54,8 +53,8 @@ export default async function loadEvents(client) {
 
           console.log(`✅ Loaded event: ${event.name}`);
 
-        } catch (error) {
-          logger.error(`Error loading event ${file}:`, error);
+        } catch (err) {
+          logger.error(`Error cargando ${file}:`, err);
         }
 
       }
@@ -64,7 +63,6 @@ export default async function loadEvents(client) {
 
   }
 
-  // 🚀 ejecutar loader
   await load(eventsPath);
 
 }
