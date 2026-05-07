@@ -14,27 +14,22 @@ export default {
     if (!member || member.user.bot) return;
 
     const config = await getGuildConfig(client.db, guild.id);
-
     if (!config.logs?.enabled) return;
 
     let logChannel = null;
 
-    // 🔥 CATEGORY
+    // CATEGORY
     if (config.logs?.categories?.voice) {
       logChannel =
         guild.channels.cache.get(config.logs.categories.voice)
-        || await guild.channels
-          .fetch(config.logs.categories.voice)
-          .catch(() => null);
+        || await guild.channels.fetch(config.logs.categories.voice).catch(() => null);
     }
 
-    // 🔥 FALLBACK
+    // FALLBACK
     if (!logChannel && config.logs?.channel) {
       logChannel =
         guild.channels.cache.get(config.logs.channel)
-        || await guild.channels
-          .fetch(config.logs.channel)
-          .catch(() => null);
+        || await guild.channels.fetch(config.logs.channel).catch(() => null);
     }
 
     if (!logChannel) return;
@@ -61,10 +56,10 @@ export default {
 
       try {
 
-        await new Promise(r => setTimeout(r, 1200));
+        await new Promise(r => setTimeout(r, 1600));
 
         const logs = await guild.fetchAuditLogs({
-          limit: 10,
+          limit: 20,
           type: AuditLogEvent.MemberDisconnect
         });
 
@@ -72,15 +67,17 @@ export default {
 
         const entry = logs.entries.find(e =>
           e.target?.id === member.id &&
-          (now - e.createdTimestamp) < 7000
+          e.executor &&
+          (now - e.createdTimestamp) < 12000
         );
 
         if (entry) {
-          disconnector =
-            `${entry.executor.tag} (${entry.executor.id})`;
+          disconnector = `${entry.executor.tag} (${entry.executor.id})`;
         }
 
-      } catch {}
+      } catch (err) {
+        console.log('Error disconnect:', err);
+      }
 
       title = '🔇 Voice Leave';
       color = '#ff4d4d';
@@ -102,10 +99,10 @@ export default {
 
       try {
 
-        await new Promise(r => setTimeout(r, 1200));
+        await new Promise(r => setTimeout(r, 1600));
 
         const logs = await guild.fetchAuditLogs({
-          limit: 10,
+          limit: 20,
           type: AuditLogEvent.MemberMove
         });
 
@@ -113,15 +110,17 @@ export default {
 
         const entry = logs.entries.find(e =>
           e.target?.id === member.id &&
-          (now - e.createdTimestamp) < 7000
+          e.executor &&
+          (now - e.createdTimestamp) < 12000
         );
 
         if (entry) {
-          mover =
-            `${entry.executor.tag} (${entry.executor.id})`;
+          mover = `${entry.executor.tag} (${entry.executor.id})`;
         }
 
-      } catch {}
+      } catch (err) {
+        console.log('Error move:', err);
+      }
 
       title = '🔁 Voice Move';
       color = '#ffaa00';
@@ -134,9 +133,7 @@ export default {
     }
 
     // 🔇 SERVER MUTE
-    else if (
-      oldState.serverMute !== newState.serverMute
-    ) {
+    else if (oldState.serverMute !== newState.serverMute) {
 
       title = newState.serverMute
         ? '🔇 Server Muted'
@@ -147,13 +144,10 @@ export default {
       description = newState.serverMute
         ? 'Un moderador silenció al usuario.'
         : 'El usuario fue desmuteado por un moderador.';
-
     }
 
     // 🔕 SERVER DEAF
-    else if (
-      oldState.serverDeaf !== newState.serverDeaf
-    ) {
+    else if (oldState.serverDeaf !== newState.serverDeaf) {
 
       title = newState.serverDeaf
         ? '🔕 Server Deafened'
@@ -163,14 +157,11 @@ export default {
 
       description = newState.serverDeaf
         ? 'Un moderador ensordeció al usuario.'
-        : 'El usuario ya puede escuchar nuevamente.';
-
+        : 'El usuario ya puede escuchar.';
     }
 
     // 🎤 SELF MUTE
-    else if (
-      oldState.selfMute !== newState.selfMute
-    ) {
+    else if (oldState.selfMute !== newState.selfMute) {
 
       title = newState.selfMute
         ? '🎤 Usuario se muteó'
@@ -181,13 +172,10 @@ export default {
       description = newState.selfMute
         ? 'El usuario se silenció.'
         : 'El usuario volvió a hablar.';
-
     }
 
     // 🎧 SELF DEAF
-    else if (
-      oldState.selfDeaf !== newState.selfDeaf
-    ) {
+    else if (oldState.selfDeaf !== newState.selfDeaf) {
 
       title = newState.selfDeaf
         ? '🎧 Usuario se ensordeció'
@@ -196,15 +184,12 @@ export default {
       color = '#9d4edd';
 
       description = newState.selfDeaf
-        ? 'El usuario se desactivó el audio.'
+        ? 'El usuario se quitó el audio.'
         : 'El usuario volvió a escuchar.';
-
     }
 
     // 📺 STREAM
-    else if (
-      oldState.streaming !== newState.streaming
-    ) {
+    else if (oldState.streaming !== newState.streaming) {
 
       title = newState.streaming
         ? '📺 Stream iniciado'
@@ -215,13 +200,10 @@ export default {
       description = newState.streaming
         ? 'El usuario comenzó a transmitir.'
         : 'El usuario dejó de transmitir.';
-
     }
 
     // 📷 CAMERA
-    else if (
-      oldState.selfVideo !== newState.selfVideo
-    ) {
+    else if (oldState.selfVideo !== newState.selfVideo) {
 
       title = newState.selfVideo
         ? '📷 Cámara activada'
@@ -232,7 +214,6 @@ export default {
       description = newState.selfVideo
         ? 'El usuario encendió su cámara.'
         : 'El usuario apagó su cámara.';
-
     }
 
     if (!title) return;
@@ -244,9 +225,7 @@ export default {
       fields: [
         {
           name: '👤 Usuario',
-          value:
-            `${member.user}\n` +
-            `🆔 \`${member.id}\``,
+          value: `${member.user}\n🆔 \`${member.id}\``,
           inline: true
         },
         {
@@ -258,9 +237,6 @@ export default {
       footer: `Servidor: ${guild.name}`
     });
 
-    await logChannel.send({
-      embeds: [embed]
-    });
-
+    await logChannel.send({ embeds: [embed] });
   }
 };
