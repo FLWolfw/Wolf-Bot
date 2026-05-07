@@ -2,6 +2,9 @@ import { Events, AuditLogEvent } from 'discord.js';
 import { getGuildConfig } from '../../services/guildConfigService.js';
 import { createLogEmbed } from '../../utils/logEmbed.js';
 
+// 🔥 NUEVO (TRACKER)
+import { startSession, endSession } from '../../services/voiceTracker.js';
+
 export default {
   name: Events.VoiceStateUpdate,
 
@@ -41,21 +44,40 @@ export default {
     // 🔊 JOIN
     if (!oldState.channel && newState.channel) {
 
+      // 🔥 INICIO TRACK TIEMPO
+      startSession(member.id, newState.channel.id);
+
       title = '🔊 Voice Join';
       color = '#00ffae';
 
-      description =
-        `📥 Se unió a ${newState.channel}`;
-
+      description = `📥 Se unió a ${newState.channel}`;
     }
 
     // 🔇 LEAVE / DISCONNECT
     else if (oldState.channel && !newState.channel) {
 
+      // 🔥 CALCULAR TIEMPO
+      const duration = endSession(member.id);
+
+      if (duration) {
+        const seconds = Math.floor(duration / 1000);
+
+        try {
+          await client.db.query(`
+            INSERT INTO voice_time (user_id, guild_id, seconds)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, guild_id)
+            DO UPDATE SET seconds = voice_time.seconds + $3
+          `, [member.id, guild.id, seconds]);
+
+        } catch (err) {
+          console.log('Error guardando tiempo voice:', err);
+        }
+      }
+
       let disconnector = 'Usuario (auto-salida)';
 
       try {
-
         await new Promise(r => setTimeout(r, 1600));
 
         const logs = await guild.fetchAuditLogs({
@@ -85,7 +107,6 @@ export default {
       description =
         `📤 Salió de ${oldState.channel}\n\n` +
         `🧑‍💼 Desconectado por:\n${disconnector}`;
-
     }
 
     // 🔁 MOVE
@@ -98,7 +119,6 @@ export default {
       let mover = 'Desconocido';
 
       try {
-
         await new Promise(r => setTimeout(r, 1600));
 
         const logs = await guild.fetchAuditLogs({
@@ -129,7 +149,6 @@ export default {
         `📂 Canal anterior:\n${oldState.channel}\n\n` +
         `📂 Canal nuevo:\n${newState.channel}\n\n` +
         `🧑‍💼 Movido por:\n${mover}`;
-
     }
 
     // 🔇 SERVER MUTE
