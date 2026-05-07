@@ -2,7 +2,22 @@ import { Events, AuditLogEvent } from 'discord.js';
 import { getGuildConfig } from '../../services/guildConfigService.js';
 import { createLogEmbed } from '../../utils/logEmbed.js';
 
-const voiceSessions = new Map(); // memoria temporal
+const voiceSessions = new Map();
+
+// 🔥 FORMATO PRO DE TIEMPO
+function formatTime(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+
+  if (m < 60) return `${m}m ${s}s`;
+
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+
+  return `${h}h ${rm}m`;
+}
 
 export default {
   name: Events.VoiceStateUpdate,
@@ -20,14 +35,12 @@ export default {
 
     let logChannel = null;
 
-    // 🔥 CATEGORY
     if (config.logs?.categories?.voice) {
       logChannel =
         guild.channels.cache.get(config.logs.categories.voice)
         || await guild.channels.fetch(config.logs.categories.voice).catch(() => null);
     }
 
-    // 🔥 FALLBACK
     if (!logChannel && config.logs?.channel) {
       logChannel =
         guild.channels.cache.get(config.logs.channel)
@@ -73,18 +86,10 @@ export default {
       if (joinTime) {
         const seconds = Math.floor((Date.now() - joinTime) / 1000);
 
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = seconds % 60;
+        timeText = formatTime(seconds);
 
-        timeText = `${h}h ${m}m ${s}s`;
+        if (seconds < 15) isAFK = true;
 
-        // 🧠 AFK DETECCIÓN (menos de 15s)
-        if (seconds < 15) {
-          isAFK = true;
-        }
-
-        // 💾 GUARDAR EN DB (CORRECTO)
         try {
           if (client.db.isAvailable()) {
             await client.db.db.pool.query(`
@@ -102,8 +107,7 @@ export default {
       }
 
       // 🔍 QUIÉN LO DESCONECTÓ
-      let mover = 'Usuario (auto)';
-      let movedByMod = false;
+      let mover = null;
 
       try {
         await new Promise(res => setTimeout(res, 800));
@@ -120,10 +124,15 @@ export default {
 
         if (entry) {
           mover = `${entry.executor.tag} (${entry.executor.id})`;
-          movedByMod = true;
         }
 
       } catch {}
+
+      // 🔥 ESTADO PRO
+      let status = '🟢 Activo en voice';
+      if (isAFK) status = '😴 AFK detectado';
+      if (oldState.serverMute) status = '🔇 Muted';
+      if (oldState.serverDeaf) status = '🔕 Deafened';
 
       action = '🔇 Salió de voice';
       color = isAFK ? '#888888' : '#ff4d4d';
@@ -139,11 +148,13 @@ export default {
         },
         {
           name: '📊 Estado',
-          value: isAFK ? '😴 AFK / Salió rápido' : '🟢 Activo'
+          value: status
         },
         {
           name: '🧑‍💼 Acción por',
-          value: movedByMod ? mover : 'Usuario (auto)'
+          value: mover
+            ? `🧑‍💼 Moderador: ${mover}`
+            : '👤 Usuario (salió por sí mismo)'
         }
       );
 
@@ -154,8 +165,7 @@ export default {
     // =========================
     else if (oldState.channel && newState.channel && oldState.channel.id !== newState.channel.id) {
 
-      let mover = 'Usuario';
-      let movedByMod = false;
+      let mover = null;
 
       try {
         await new Promise(res => setTimeout(res, 800));
@@ -172,7 +182,6 @@ export default {
 
         if (entry) {
           mover = `${entry.executor.tag} (${entry.executor.id})`;
-          movedByMod = true;
         }
 
       } catch {}
@@ -193,8 +202,9 @@ export default {
         },
         {
           name: '🧑‍💼 Movido por',
-          value: movedByMod ? mover : 'Usuario',
-          inline: false
+          value: mover
+            ? `🧑‍💼 Moderador: ${mover}`
+            : '👤 Usuario'
         }
       );
 
@@ -211,8 +221,8 @@ export default {
       fields.push({
         name: '📊 Estado',
         value: newState.serverMute
-          ? 'Silenciado por moderador'
-          : 'Ya puede hablar'
+          ? '🔇 Silenciado por moderador'
+          : '🔊 Puede hablar'
       });
 
     }
@@ -228,17 +238,14 @@ export default {
       fields.push({
         name: '📊 Estado',
         value: newState.serverDeaf
-          ? 'No puede escuchar'
-          : 'Puede escuchar nuevamente'
+          ? '🔕 No puede escuchar'
+          : '🔊 Puede escuchar nuevamente'
       });
 
     }
 
     if (!action) return;
 
-    // =========================
-    // 📦 EMBED FINAL
-    // =========================
     const embed = createLogEmbed({
       title: action,
       color,
