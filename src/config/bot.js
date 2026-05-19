@@ -10,6 +10,12 @@ export const botConfig = {
     tagline: "The all-in-one Discord bot for moderation, economy, leveling and more.",
     // Public dashboard URL (used in links/CTAs). Falls back to env or relative.
     dashboardUrl: process.env.DASHBOARD_URL || "",
+    // Public support server invite (used in landing, blocked-command embeds,
+    // guildCreate pending-approval notice, footer). e.g. https://discord.gg/abc
+    supportInvite: process.env.SUPPORT_INVITE || "",
+    // Web logo path. Drop a transparent PNG at src/dashboard/public/logo.png
+    // and it appears automatically (gracefully falls back to the W monogram).
+    logoPath: "/assets/logo.png",
   },
 
   // =========================

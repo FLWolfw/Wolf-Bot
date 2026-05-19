@@ -34,6 +34,14 @@ export default {
       if (!channel) return;
 
       const dashboardUrl = botConfig.brand?.dashboardUrl || process.env.DASHBOARD_URL || '';
+      const supportInvite = botConfig.brand?.supportInvite || '';
+      const logoUrl = dashboardUrl
+        ? `${dashboardUrl.replace(/\/$/, '')}${botConfig.brand?.logoPath || '/assets/logo.png'}`
+        : null;
+
+      const activateValue = supportInvite
+        ? `Únete al servidor de soporte y envía el **ID de tu servidor** para que aprobemos el acceso.\n${supportInvite}`
+        : 'Comparte el ID de este servidor con el dueño del bot y pídele que lo active.';
 
       await channel.send({
         embeds: [{
@@ -41,9 +49,10 @@ export default {
           title: `🔒 ${brand} está pendiente de activación`,
           description:
             `¡Gracias por añadir **${brand}**! Este servidor todavía **no está activado**, ` +
-            'así que los comandos estarán bloqueados hasta que el dueño del bot conceda acceso.',
+            'así que los comandos estarán bloqueados hasta que se conceda acceso.',
+          thumbnail: logoUrl ? { url: logoUrl } : undefined,
           fields: [
-            { name: '📋 Para activarlo', value: 'Comparte el ID de este servidor con el dueño del bot y pídele que lo active.' },
+            { name: '📋 Para activarlo', value: activateValue },
             { name: '🆔 ID de este servidor', value: `\`${guild.id}\`` },
             ...(dashboardUrl ? [{ name: '🌐 Panel', value: dashboardUrl }] : []),
           ],

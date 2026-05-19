@@ -1,4 +1,4 @@
-import { basePage, esc, brandMark, BRAND, TAGLINE } from './layout.js';
+import { basePage, esc, brandMark, BRAND, TAGLINE, SUPPORT } from './layout.js';
 import { icon } from './icons.js';
 
 const FEATURES = [
@@ -21,6 +21,7 @@ export function renderLanding({ loggedIn }) {
   <div class="topbar">
     <div class="brand">${brandMark(34)}<span>${esc(BRAND)}</span></div>
     <div class="row">
+      ${SUPPORT ? `<a class="btn btn-ghost" href="${esc(SUPPORT)}" target="_blank" rel="noopener">Soporte</a>` : ''}
       <a class="btn btn-ghost" href="/invite">Añadir a Discord</a>
       ${loggedIn ? `<a class="btn" href="/dashboard">Panel</a>` : `<a class="btn" href="/login">Entrar</a>`}
     </div>

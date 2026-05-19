@@ -101,13 +101,22 @@ export default {
               const approved = await isGuildApproved(client.db, interaction.guild.id);
               if (!approved) {
                 const brand = botConfig.brand?.name || 'Wolf';
+                const supportInvite = botConfig.brand?.supportInvite || '';
+                const dashboardUrl = botConfig.brand?.dashboardUrl || '';
+                const logoUrl = dashboardUrl
+                  ? `${dashboardUrl.replace(/\/$/, '')}${botConfig.brand?.logoPath || '/assets/logo.png'}`
+                  : null;
+                const description = supportInvite
+                  ? `Este servidor todavía no tiene acceso a **${brand}**.\n\n` +
+                    `Únete al servidor de soporte y envía el ID para activarlo:\n${supportInvite}`
+                  : `Este servidor todavía no tiene acceso a **${brand}**.\n\n` +
+                    'Pídele al dueño del bot que lo active para empezar a usar los comandos.';
                 await interaction.reply({
                   embeds: [{
                     color: 0xef4444,
                     title: '🔒 Servidor no activado',
-                    description:
-                      `Este servidor todavía no tiene acceso a **${brand}**.\n\n` +
-                      'Pídele al dueño del bot que lo active para empezar a usar los comandos.',
+                    description,
+                    thumbnail: logoUrl ? { url: logoUrl } : undefined,
                     fields: [{ name: 'ID del servidor', value: `\`${interaction.guild.id}\`` }],
                     footer: { text: brand },
                   }],
