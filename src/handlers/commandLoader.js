@@ -230,9 +230,16 @@ export async function registerCommands(client, guildId) {
         } else {
             // ✅ Sin GUILD_ID → registrar globalmente en todos los servidores
             // ⚠️ Los comandos globales tardan hasta 1 hora en propagarse en Discord
-            logger.info(`Registering ${commands.length} commands GLOBALLY (all servers)...`);
-            await client.application.commands.set(commands);
-            logger.info(`✅ Successfully registered ${commands.length} global commands`);
+            // Discord rechaza > 100 comandos (DiscordAPIError 30032). Truncar
+            // defensivamente para que nunca tumbe el arranque.
+            let globalCommands = commands;
+            if (globalCommands.length > 100) {
+                logger.warn(`Global command count (${globalCommands.length}) exceeds Discord limit (100), truncating to 100`);
+                globalCommands = globalCommands.slice(0, 100);
+            }
+            logger.info(`Registering ${globalCommands.length} commands GLOBALLY (all servers)...`);
+            await client.application.commands.set(globalCommands);
+            logger.info(`✅ Successfully registered ${globalCommands.length} global commands`);
             logger.info('⏳ Note: Global commands can take up to 1 hour to appear in all servers');
         }
 

@@ -65,7 +65,14 @@ class TitanBot extends Client {
       await this.login(this.config.bot.token);
 
       startupLog('Registering slash commands...');
-      await this.registerCommands();
+      // A command-registration failure (e.g. Discord's 100-command cap,
+      // a transient API error) must NOT take the whole bot down — it can
+      // keep running with whatever Discord already has registered.
+      try {
+        await this.registerCommands();
+      } catch (registerError) {
+        logger.error('Slash command registration failed — continuing with previously registered commands', { error: registerError });
+      }
 
       // Banner final con resumen del estado
       printStartupBanner(
