@@ -1,10 +1,11 @@
-import { SlashCommandBuilder, PermissionFlagsBits, PermissionsBitField, ChannelType, MessageFlags } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed, infoEmbed, warningEmbed } from '../../utils/embeds.js';
+import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from 'discord.js';
+import { errorEmbed, successEmbed } from '../../utils/embeds.js';
 import { logEvent } from '../../utils/moderation.js';
 import { logger } from '../../utils/logger.js';
 import { sanitizeMarkdown } from '../../utils/sanitization.js';
-
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import { t, pickLanguage } from '../../services/i18n.js';
+
 export default {
     data: new SlashCommandBuilder()
         .setName("dm")
@@ -32,6 +33,7 @@ export default {
     category: "Moderation",
 
     async execute(interaction, config, client) {
+        const lang = pickLanguage(config, interaction.guild);
         const deferSuccess = await InteractionHelper.safeDefer(interaction);
         if (!deferSuccess) {
             logger.warn(`DM interaction defer failed`, {
@@ -42,49 +44,47 @@ export default {
             return;
         }
 
-    const targetUser = interaction.options.getUser("user");
+        const targetUser = interaction.options.getUser("user");
         const message = interaction.options.getString("message");
         const anonymous = interaction.options.getBoolean("anonymous") || false;
 
         try {
-            
             if (message.length > 2000) {
                 return await InteractionHelper.safeEditReply(interaction, {
                     embeds: [
                         errorEmbed(
-                            "Message Too Long",
-                            "Messages must be under 2000 characters."
+                            t(lang, 'wolf.cmd.mod.dm.tooLongTitle'),
+                            t(lang, 'wolf.cmd.mod.dm.tooLongDesc')
                         ),
                     ],
                     flags: MessageFlags.Ephemeral,
                 });
             }
 
-            
             if (targetUser.bot) {
                 return await InteractionHelper.safeEditReply(interaction, {
                     embeds: [
                         errorEmbed(
-                            "Cannot DM Bot",
-                            "You cannot send DMs to bot accounts."
+                            t(lang, 'wolf.cmd.mod.dm.cantDmBotTitle'),
+                            t(lang, 'wolf.cmd.mod.dm.cantDmBotDesc')
                         ),
                     ],
                     flags: MessageFlags.Ephemeral,
                 });
             }
 
-            
             const sanitized = sanitizeMarkdown(message);
-
             const dmChannel = await targetUser.createDM();
-            
+
             await dmChannel.send({
                 embeds: [
                     successEmbed(
-                        anonymous ? "Message from the Staff Team" : `Message from ${interaction.user.tag}`,
+                        anonymous
+                            ? t(lang, 'wolf.cmd.mod.dm.anonFrom')
+                            : t(lang, 'wolf.cmd.mod.dm.namedFrom', { user: interaction.user.tag }),
                         sanitized
                     ).setFooter({
-                        text: `You cannot reply to this message. | Logger ID: ${interaction.id}`
+                        text: t(lang, 'wolf.cmd.mod.dm.dmFooter', { id: interaction.id })
                     })
                 ]
             });
@@ -109,29 +109,27 @@ export default {
             return await InteractionHelper.safeEditReply(interaction, {
                 embeds: [
                     successEmbed(
-                        "DM Sent",
-                        `Successfully sent a message to ${targetUser.tag}`
+                        t(lang, 'wolf.cmd.mod.dm.sentTitle'),
+                        t(lang, 'wolf.cmd.mod.dm.sentDesc', { user: targetUser.tag })
                     ),
                 ],
             });
         } catch (error) {
             logger.error('DM command error:', error);
-            
-if (error.code === 50007) {
+
+            if (error.code === 50007) {
                 return await InteractionHelper.safeEditReply(interaction, {
                     embeds: [
-                        errorEmbed("Error", `Could not send a DM to ${targetUser.tag}. They may have DMs disabled.`),
+                        errorEmbed("Error", t(lang, 'wolf.cmd.mod.dm.closedDMs', { user: targetUser.tag })),
                     ],
                 });
             }
-            
+
             return await InteractionHelper.safeEditReply(interaction, {
                 embeds: [
-                    errorEmbed("Error", `Failed to send DM: ${error.message}`),
+                    errorEmbed("Error", t(lang, 'wolf.cmd.mod.dm.sendFailed', { error: error.message })),
                 ],
             });
         }
     }
 };
-
-

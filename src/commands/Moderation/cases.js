@@ -1,8 +1,10 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed } from '../../utils/embeds.js';
+import { createEmbed, errorEmbed } from '../../utils/embeds.js';
 import { getModerationCases } from '../../utils/moderation.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import { t, pickLanguage } from '../../services/i18n.js';
+
 export default {
     data: new SlashCommandBuilder()
         .setName('cases')
@@ -32,6 +34,7 @@ export default {
         ),
 
     async execute(interaction, config, client) {
+        const lang = pickLanguage(config, interaction.guild);
         const deferSuccess = await InteractionHelper.safeDefer(interaction);
         if (!deferSuccess) {
             logger.warn(`Cases interaction defer failed`, {
@@ -56,9 +59,11 @@ export default {
             const cases = await getModerationCases(interaction.guild.id, filters);
 
             if (cases.length === 0) {
-                throw new Error(targetUser 
-                    ? `No moderation cases found for ${targetUser.tag}`
-                    : `No ${filterType === 'all' ? '' : filterType} cases found in this server.`
+                throw new Error(targetUser
+                    ? t(lang, 'wolf.cmd.mod.cases.noResultsUser', { user: targetUser.tag })
+                    : filterType === 'all'
+                        ? t(lang, 'wolf.cmd.mod.cases.noResultsAll')
+                        : t(lang, 'wolf.cmd.mod.cases.noResults', { type: filterType })
                 );
             }
 
@@ -68,27 +73,34 @@ export default {
 
             const createCasesEmbed = (page) => {
                 const startIndex = (page - 1) * CASES_PER_PAGE;
-                const endIndex = startIndex + CASES_PER_PAGE;
-                const pageCases = cases.slice(startIndex, endIndex);
+                const pageCases = cases.slice(startIndex, startIndex + CASES_PER_PAGE);
 
                 const embed = createEmbed({
-                    title: '📋 Moderation Cases',
-                    description: `Showing moderation cases for **${interaction.guild.name}**\n\n**Page ${page} of ${totalPages}**`
+                    title: t(lang, 'wolf.cmd.mod.cases.title'),
+                    description: t(lang, 'wolf.cmd.mod.cases.desc', { guild: interaction.guild.name, page, total: totalPages })
                 });
 
                 pageCases.forEach(case_ => {
                     const date = new Date(case_.createdAt).toLocaleDateString();
                     const time = new Date(case_.createdAt).toLocaleTimeString();
-                    
+
                     embed.addFields({
-                        name: `Case #${case_.caseId} - ${case_.action}`,
-                        value: `**Target:** ${case_.target}\n**Moderator:** ${case_.executor}\n**Date:** ${date} at ${time}\n**Reason:** ${case_.reason || 'No reason provided'}`,
+                        name: t(lang, 'wolf.cmd.mod.cases.fieldName', { id: case_.caseId, action: case_.action }),
+                        value: t(lang, 'wolf.cmd.mod.cases.fieldValue', {
+                            target: case_.target,
+                            executor: case_.executor,
+                            date,
+                            time,
+                            reason: case_.reason || t(lang, 'wolf.cmd.mod.cases.noReason')
+                        }),
                         inline: false
                     });
                 });
 
                 embed.setFooter({
-                    text: `Total cases: ${cases.length} | Filter: ${filterType}${targetUser ? ` | User: ${targetUser.tag}` : ''}`
+                    text: targetUser
+                        ? t(lang, 'wolf.cmd.mod.cases.footerUser', { total: cases.length, filter: filterType, user: targetUser.tag })
+                        : t(lang, 'wolf.cmd.mod.cases.footer', { total: cases.length, filter: filterType })
                 });
 
                 return embed;
@@ -96,7 +108,7 @@ export default {
 
             const createNavigationRow = (page) => {
                 const row = new ActionRowBuilder();
-                
+
                 const prevButton = new ButtonBuilder()
                     .setCustomId('prev_page')
                     .setLabel('⬅️ Previous')
@@ -105,7 +117,7 @@ export default {
 
                 const pageInfoButton = new ButtonBuilder()
                     .setCustomId('page_info')
-                    .setLabel(`Page ${page}/${totalPages}`)
+                    .setLabel(t(lang, 'wolf.cmd.mod.cases.pageBtn', { page, total: totalPages }))
                     .setStyle(ButtonStyle.Primary)
                     .setDisabled(true);
 
@@ -119,14 +131,14 @@ export default {
                 return row;
             };
 
-            const message = await interaction.editReply({ 
-                embeds: [createCasesEmbed(currentPage)], 
+            const message = await interaction.editReply({
+                embeds: [createCasesEmbed(currentPage)],
                 components: [createNavigationRow(currentPage)]
             });
 
             const collector = message.createMessageComponentCollector({
                 componentType: ComponentType.Button,
-time: 120000
+                time: 120000
             });
 
             collector.on('collect', async (buttonInteraction) => {
@@ -134,7 +146,7 @@ time: 120000
 
                 if (buttonInteraction.user.id !== interaction.user.id) {
                     await buttonInteraction.followUp({
-                        content: 'You cannot use these buttons. Run `/cases` to get your own case view.',
+                        content: t(lang, 'wolf.cmd.mod.cases.buttonOnly'),
                         flags: MessageFlags.Ephemeral
                     });
                     return;
@@ -157,13 +169,9 @@ time: 120000
             collector.on('end', async () => {
                 const disabledRow = createNavigationRow(currentPage);
                 disabledRow.components.forEach(button => button.setDisabled(true));
-                
                 try {
-                    await message.edit({
-                        components: [disabledRow]
-                    });
-                } catch (error) {
-                }
+                    await message.edit({ components: [disabledRow] });
+                } catch (_) {}
             });
 
         } catch (error) {
@@ -172,7 +180,7 @@ time: 120000
                 embeds: [
                     errorEmbed(
                         'System Error',
-                        'An error occurred while retrieving moderation cases. Please try again later.'
+                        t(lang, 'wolf.cmd.mod.cases.sysError')
                     )
                 ],
                 flags: MessageFlags.Ephemeral
@@ -180,7 +188,3 @@ time: 120000
         }
     }
 };
-
-
-
-

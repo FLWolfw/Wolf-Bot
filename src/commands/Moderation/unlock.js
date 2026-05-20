@@ -1,20 +1,19 @@
-import { SlashCommandBuilder, PermissionFlagsBits, PermissionsBitField, ChannelType } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed, infoEmbed, warningEmbed } from '../../utils/embeds.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { errorEmbed, successEmbed } from '../../utils/embeds.js';
 import { logEvent } from '../../utils/moderation.js';
 import { logger } from '../../utils/logger.js';
-import { getColor } from '../../config/bot.js';
-
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import { t, pickLanguage } from '../../services/i18n.js';
+
 export default {
     data: new SlashCommandBuilder()
         .setName("unlock")
-        .setDescription(
-            "Unlocks the current channel (allows @everyone to send messages again).",
-        )
-.setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+        .setDescription("Unlocks the current channel (allows @everyone to send messages again).")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
     category: "moderation",
 
     async execute(interaction, config, client) {
+        const lang = pickLanguage(config, interaction.guild);
         const deferSuccess = await InteractionHelper.safeDefer(interaction);
         if (!deferSuccess) {
             logger.warn(`Unlock interaction defer failed`, {
@@ -25,16 +24,12 @@ export default {
             return;
         }
 
-        if (
-            !interaction.member.permissions.has(
-                PermissionFlagsBits.ManageChannels,
-            )
-        )
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageChannels))
             return await InteractionHelper.safeEditReply(interaction, {
                 embeds: [
                     errorEmbed(
-                        "Permission Denied",
-                        "You need the `Manage Channels` permission to unlock channels.",
+                        t(lang, 'wolf.cmd.mod.common.permDenied'),
+                        t(lang, 'wolf.cmd.mod.unlock.permDenied'),
                     ),
                 ],
             });
@@ -45,16 +40,14 @@ export default {
         try {
             const currentPermissions = channel.permissionsFor(everyoneRole);
             if (
-                currentPermissions.has(PermissionFlagsBits.SendMessages) ===
-                    true ||
-                currentPermissions.has(PermissionFlagsBits.SendMessages) ===
-                    null
+                currentPermissions.has(PermissionFlagsBits.SendMessages) === true ||
+                currentPermissions.has(PermissionFlagsBits.SendMessages) === null
             ) {
                 return await InteractionHelper.safeEditReply(interaction, {
                     embeds: [
                         errorEmbed(
-                            "Channel Already Unlocked",
-                            `${channel} is not explicitly locked (everyone can already send messages).`,
+                            t(lang, 'wolf.cmd.mod.unlock.alreadyUnlockedTitle'),
+                            t(lang, 'wolf.cmd.mod.unlock.alreadyUnlockedDesc', { channel }),
                         ),
                     ],
                 });
@@ -63,29 +56,8 @@ export default {
             await channel.permissionOverwrites.edit(
                 everyoneRole,
                 { SendMessages: true },
-                {
-                    type: 0,
-                    reason: `Channel unlocked by ${interaction.user.tag}`,
-},
+                { type: 0, reason: `Channel unlocked by ${interaction.user.tag}` },
             );
-
-            const unlockEmbed = createEmbed(
-                "🔓 Channel Unlocked (Action Log)",
-                `${channel} has been unlocked by ${interaction.user}.`,
-            )
-.setColor(getColor('success'))
-                .addFields(
-                    {
-                        name: "Channel",
-                        value: channel.toString(),
-                        inline: true,
-                    },
-                    {
-                        name: "Moderator",
-                        value: `${interaction.user.tag} (${interaction.user.id})`,
-                        inline: true,
-                    },
-                );
 
             await logEvent({
                 client,
@@ -104,8 +76,8 @@ export default {
             await InteractionHelper.safeEditReply(interaction, {
                 embeds: [
                     successEmbed(
-                        `🔓 **Channel Unlocked**`,
-                        `${channel} is now unlocked. You may speak now.`,
+                        t(lang, 'wolf.cmd.mod.unlock.successTitle'),
+                        t(lang, 'wolf.cmd.mod.unlock.successDesc', { channel }),
                     ),
                 ],
             });
@@ -113,14 +85,9 @@ export default {
             logger.error('Unlock command error:', error);
             await InteractionHelper.safeEditReply(interaction, {
                 embeds: [
-                    errorEmbed(
-                        "An unexpected error occurred while trying to unlock the channel. Check my permissions (I need 'Manage Channels').",
-                    ),
+                    errorEmbed(t(lang, 'wolf.cmd.mod.unlock.unexpectedError')),
                 ],
             });
         }
     }
 };
-
-
-

@@ -1,26 +1,13 @@
 import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed, infoEmbed, warningEmbed } from '../../utils/embeds.js';
+import { errorEmbed, successEmbed, infoEmbed } from '../../utils/embeds.js';
 import { logger } from '../../utils/logger.js';
-import { getFromDb, setInDb, deleteFromDb } from '../../utils/database.js';
+import { getFromDb, setInDb } from '../../utils/database.js';
 import { sanitizeInput } from '../../utils/sanitization.js';
-
-
-
-
-
-
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import { t, pickLanguage } from '../../services/i18n.js';
+
 function getUserNotesKey(guildId, userId) {
     return `moderation_user_notes_${guildId}_${userId}`;
-}
-
-
-
-
-
-
-function getGuildNotesListKey(guildId) {
-    return `moderation_user_notes_list_${guildId}`;
 }
 
 export default {
@@ -32,28 +19,19 @@ export default {
                 .setName("add")
                 .setDescription("Add a note to a user")
                 .addUserOption(option =>
-                    option
-                        .setName("target")
-                        .setDescription("The user to add a note for")
-                        .setRequired(true)
+                    option.setName("target").setDescription("The user to add a note for").setRequired(true)
                 )
                 .addStringOption(option =>
-                    option
-                        .setName("note")
-                        .setDescription("The note to add")
-                        .setRequired(true)
+                    option.setName("note").setDescription("The note to add").setRequired(true)
                 )
                 .addStringOption(option =>
-                    option
-                        .setName("type")
-                        .setDescription("Type of note")
+                    option.setName("type").setDescription("Type of note")
                         .addChoices(
                             { name: "Warning", value: "warning" },
                             { name: "Positive", value: "positive" },
                             { name: "Neutral", value: "neutral" },
                             { name: "Alert", value: "alert" }
-                        )
-                        .setRequired(false)
+                        ).setRequired(false)
                 )
         )
         .addSubcommand(subcommand =>
@@ -61,10 +39,7 @@ export default {
                 .setName("view")
                 .setDescription("View notes for a user")
                 .addUserOption(option =>
-                    option
-                        .setName("target")
-                        .setDescription("The user to view notes for")
-                        .setRequired(true)
+                    option.setName("target").setDescription("The user to view notes for").setRequired(true)
                 )
         )
         .addSubcommand(subcommand =>
@@ -72,17 +47,10 @@ export default {
                 .setName("remove")
                 .setDescription("Remove a specific note from a user")
                 .addUserOption(option =>
-                    option
-                        .setName("target")
-                        .setDescription("The user to remove a note from")
-                        .setRequired(true)
+                    option.setName("target").setDescription("The user to remove a note from").setRequired(true)
                 )
                 .addIntegerOption(option =>
-                    option
-                        .setName("index")
-                        .setDescription("The index of the note to remove")
-                        .setRequired(true)
-                        .setMinValue(1)
+                    option.setName("index").setDescription("The index of the note to remove").setRequired(true).setMinValue(1)
                 )
         )
         .addSubcommand(subcommand =>
@@ -90,22 +58,21 @@ export default {
                 .setName("clear")
                 .setDescription("Clear all notes for a user")
                 .addUserOption(option =>
-                    option
-                        .setName("target")
-                        .setDescription("The user to clear notes for")
-                        .setRequired(true)
+                    option.setName("target").setDescription("The user to clear notes for").setRequired(true)
                 )
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
     category: "moderation",
 
     async execute(interaction, config, client) {
+        const lang = pickLanguage(config, interaction.guild);
+
         if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
             return InteractionHelper.safeReply(interaction, {
                 embeds: [
                     errorEmbed(
-                        "Permission Denied",
-                        "You do not have permission to manage user notes."
+                        t(lang, 'wolf.cmd.mod.common.permDenied'),
+                        t(lang, 'wolf.cmd.mod.usernotes.permDenied')
                     ),
                 ],
             });
@@ -115,12 +82,12 @@ export default {
         const targetUser = interaction.options.getUser("target");
         const guildId = interaction.guild.id;
 
-        if (subcommand !== "view" && subcommand !== "remove" && subcommand !== "clear" && subcommand !== "add") {
+        if (!['view', 'remove', 'clear', 'add'].includes(subcommand)) {
             return InteractionHelper.safeReply(interaction, {
                 embeds: [
                     errorEmbed(
-                        "Invalid Subcommand",
-                        "Please select a valid subcommand."
+                        t(lang, 'wolf.cmd.mod.common.permDenied'),
+                        t(lang, 'wolf.cmd.mod.usernotes.invalidSub')
                     ),
                 ],
             });
@@ -135,21 +102,16 @@ export default {
         try {
             switch (subcommand) {
                 case "add":
-                    return await handleAddNote(interaction, targetUser, notes, guildId);
+                    return await handleAddNote(interaction, targetUser, notes, guildId, lang);
                 case "view":
-                    return await handleViewNotes(interaction, targetUser, notes);
+                    return await handleViewNotes(interaction, targetUser, notes, lang);
                 case "remove":
-                    return await handleRemoveNote(interaction, targetUser, notes, guildId);
+                    return await handleRemoveNote(interaction, targetUser, notes, guildId, lang);
                 case "clear":
-                    return await handleClearNotes(interaction, targetUser, notes, guildId);
+                    return await handleClearNotes(interaction, targetUser, notes, guildId, lang);
                 default:
                     return InteractionHelper.safeReply(interaction, {
-                        embeds: [
-                            errorEmbed(
-                                "Invalid Subcommand",
-                                "Please select a valid subcommand."
-                            ),
-                        ],
+                        embeds: [errorEmbed(t(lang, 'wolf.cmd.mod.usernotes.invalidSub'))],
                     });
             }
         } catch (error) {
@@ -158,7 +120,7 @@ export default {
                 embeds: [
                     errorEmbed(
                         "System Error",
-                        "An error occurred while processing your request. Please try again later."
+                        t(lang, 'wolf.cmd.mod.usernotes.sysError')
                     ),
                 ],
                 flags: MessageFlags.Ephemeral
@@ -167,7 +129,7 @@ export default {
     }
 };
 
-async function handleAddNote(interaction, targetUser, notes, guildId) {
+async function handleAddNote(interaction, targetUser, notes, guildId, lang) {
     let note = interaction.options.getString("note").trim();
     const type = interaction.options.getString("type") || "neutral";
 
@@ -175,8 +137,8 @@ async function handleAddNote(interaction, targetUser, notes, guildId) {
         return InteractionHelper.safeReply(interaction, {
             embeds: [
                 errorEmbed(
-                    "Note Too Long",
-                    "Notes must be 1000 characters or less."
+                    t(lang, 'wolf.cmd.mod.usernotes.add.tooLongTitle'),
+                    t(lang, 'wolf.cmd.mod.usernotes.add.tooLong')
                 ),
             ],
         });
@@ -186,52 +148,52 @@ async function handleAddNote(interaction, targetUser, notes, guildId) {
         return InteractionHelper.safeReply(interaction, {
             embeds: [
                 errorEmbed(
-                    "Empty Note",
-                    "Note cannot be empty."
+                    t(lang, 'wolf.cmd.mod.usernotes.add.emptyTitle'),
+                    t(lang, 'wolf.cmd.mod.usernotes.add.empty')
                 ),
             ],
         });
     }
 
-    
     note = sanitizeInput(note);
 
     const noteData = {
         id: Date.now(),
         content: note,
-        type: type,
+        type,
         author: interaction.user.tag,
         authorId: interaction.user.id,
         timestamp: new Date().toISOString()
     };
 
     notes.push(noteData);
-
-    const notesKey = getUserNotesKey(guildId, targetUser.id);
-    await setInDb(notesKey, notes);
+    await setInDb(getUserNotesKey(guildId, targetUser.id), notes);
 
     const typeInfo = getNoteTypeInfo(type);
 
     return InteractionHelper.safeReply(interaction, {
         embeds: [
             successEmbed(
-                `${typeInfo.emoji} Note Added`,
-                `Added a **${type}** note for **${targetUser.tag}**:\n\n` +
-                `> ${note}\n\n` +
-                `**Moderator:** ${interaction.user.tag}\n` +
-                `**Total Notes:** ${notes.length}`
+                t(lang, 'wolf.cmd.mod.usernotes.add.successTitle', { emoji: typeInfo.emoji }),
+                t(lang, 'wolf.cmd.mod.usernotes.add.successDesc', {
+                    type,
+                    user: targetUser.tag,
+                    note,
+                    mod: interaction.user.tag,
+                    count: notes.length
+                })
             )
         ]
     });
 }
 
-async function handleViewNotes(interaction, targetUser, notes) {
+async function handleViewNotes(interaction, targetUser, notes, lang) {
     if (notes.length === 0) {
         return InteractionHelper.safeReply(interaction, {
             embeds: [
                 infoEmbed(
-                    "📝 No Notes",
-                    `There are no notes for **${targetUser.tag}**.`
+                    t(lang, 'wolf.cmd.mod.usernotes.view.noNotesTitle'),
+                    t(lang, 'wolf.cmd.mod.usernotes.view.noNotesDesc', { user: targetUser.tag })
                 ),
             ],
         });
@@ -239,14 +201,14 @@ async function handleViewNotes(interaction, targetUser, notes) {
 
     const sortedNotes = [...notes].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    let description = `**Notes for ${targetUser.tag} (${targetUser.id}):**\n\n`;
-    
+    let description = t(lang, 'wolf.cmd.mod.usernotes.view.header', { user: targetUser.tag, id: targetUser.id });
+
     sortedNotes.forEach((note, index) => {
         const typeInfo = getNoteTypeInfo(note.type);
         const date = new Date(note.timestamp).toLocaleDateString();
         description += `${typeInfo.emoji} **Note #${index + 1}** (${note.type}) - ${date}\n`;
         description += `> ${note.content}\n`;
-        description += `*Added by ${note.author}*\n\n`;
+        description += `${t(lang, 'wolf.cmd.mod.usernotes.view.addedBy', { author: note.author })}\n\n`;
     });
 
     if (description.length > 4000) {
@@ -256,22 +218,22 @@ async function handleViewNotes(interaction, targetUser, notes) {
     return InteractionHelper.safeReply(interaction, {
         embeds: [
             infoEmbed(
-                `📝 User Notes (${notes.length})`,
+                t(lang, 'wolf.cmd.mod.usernotes.view.title', { count: notes.length }),
                 description
             )
         ]
     });
 }
 
-async function handleRemoveNote(interaction, targetUser, notes, guildId) {
-const index = interaction.options.getInteger("index") - 1;
+async function handleRemoveNote(interaction, targetUser, notes, guildId, lang) {
+    const index = interaction.options.getInteger("index") - 1;
 
     if (index < 0 || index >= notes.length) {
         return InteractionHelper.safeReply(interaction, {
             embeds: [
                 errorEmbed(
-                    "Invalid Index",
-                    `Please provide a valid note index (1-${notes.length}).`
+                    t(lang, 'wolf.cmd.mod.usernotes.remove.invalidTitle'),
+                    t(lang, 'wolf.cmd.mod.usernotes.remove.invalidDesc', { max: notes.length })
                 ),
             ],
         });
@@ -279,48 +241,47 @@ const index = interaction.options.getInteger("index") - 1;
 
     const removedNote = notes[index];
     notes.splice(index, 1);
-
-    const notesKey = getUserNotesKey(guildId, targetUser.id);
-    await setInDb(notesKey, notes);
+    await setInDb(getUserNotesKey(guildId, targetUser.id), notes);
 
     const typeInfo = getNoteTypeInfo(removedNote.type);
 
     return InteractionHelper.safeReply(interaction, {
         embeds: [
             successEmbed(
-                `${typeInfo.emoji} Note Removed`,
-                `Removed note #${index + 1} from **${targetUser.tag}**:\n\n` +
-                `> ${removedNote.content}\n\n` +
-                `**Remaining Notes:** ${notes.length}`
+                t(lang, 'wolf.cmd.mod.usernotes.remove.successTitle', { emoji: typeInfo.emoji }),
+                t(lang, 'wolf.cmd.mod.usernotes.remove.successDesc', {
+                    num: index + 1,
+                    user: targetUser.tag,
+                    content: removedNote.content,
+                    remaining: notes.length
+                })
             )
         ]
     });
 }
 
-async function handleClearNotes(interaction, targetUser, notes, guildId) {
+async function handleClearNotes(interaction, targetUser, notes, guildId, lang) {
     const noteCount = notes.length;
-    
+
     if (noteCount === 0) {
         return InteractionHelper.safeReply(interaction, {
             embeds: [
                 infoEmbed(
-                    "No Notes to Clear",
-                    `There are no notes for **${targetUser.tag}** to clear.`
+                    t(lang, 'wolf.cmd.mod.usernotes.clear.noNotesTitle'),
+                    t(lang, 'wolf.cmd.mod.usernotes.clear.noNotesDesc', { user: targetUser.tag })
                 ),
             ],
         });
     }
 
     notes.length = 0;
-
-    const notesKey = getUserNotesKey(guildId, targetUser.id);
-    await setInDb(notesKey, notes);
+    await setInDb(getUserNotesKey(guildId, targetUser.id), notes);
 
     return InteractionHelper.safeReply(interaction, {
         embeds: [
             successEmbed(
-                "🗑️ Notes Cleared",
-                `Cleared **${noteCount}** notes from **${targetUser.tag}**.`
+                t(lang, 'wolf.cmd.mod.usernotes.clear.successTitle'),
+                t(lang, 'wolf.cmd.mod.usernotes.clear.successDesc', { count: noteCount, user: targetUser.tag })
             )
         ]
     });
@@ -333,11 +294,5 @@ function getNoteTypeInfo(type) {
         neutral: { emoji: "📝", color: "#74C0FC" },
         alert: { emoji: "🚨", color: "#FFD43B" }
     };
-    
     return types[type] || types.neutral;
 }
-
-
-
-
-
