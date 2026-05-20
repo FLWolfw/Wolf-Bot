@@ -22,10 +22,11 @@ import { TitanBotError, ErrorTypes } from '../../../utils/errorHandler.js';
 import { getGuildConfig, setGuildConfig } from '../../../services/guildConfig.js';
 import { getWelcomeConfig } from '../../../utils/database.js';
 import { botHasPermission } from '../../../utils/permissionGuard.js';
+import { t, pickLanguage } from '../../../services/i18n.js';
 
 // ─── Live Panel Sync ──────────────────────────────────────────────────────────
 
-async function updateLivePanel(guild, cfg) {
+async function updateLivePanel(guild, cfg, lang) {
     if (!cfg.channelId || !cfg.messageId) return;
     try {
         const channel = guild.channels.cache.get(cfg.channelId);
@@ -34,14 +35,14 @@ async function updateLivePanel(guild, cfg) {
         if (!msg) return;
 
         const verifyEmbed = new EmbedBuilder()
-            .setTitle('✅ Server Verification')
+            .setTitle(t(lang, 'wolf.cmd.verification.admin.livePanelTitle'))
             .setDescription(cfg.message || botConfig.verification.defaultMessage)
             .setColor(getColor('success'));
 
         const verifyButton = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('verify_user')
-                .setLabel(cfg.buttonText || botConfig.verification.defaultButtonText)
+                .setLabel(cfg.buttonText || t(lang, 'wolf.cmd.verification.admin.livePanelDefaultButtonText'))
                 .setStyle(ButtonStyle.Success)
                 .setEmoji('✅'),
         );
@@ -54,70 +55,70 @@ async function updateLivePanel(guild, cfg) {
 
 // ─── Embed & Menu Builders ────────────────────────────────────────────────────
 
-function buildDashboardEmbed(cfg, guild, verifiedUserCount = 0, conflictSummary = '') {
-    const channel = cfg.channelId ? `<#${cfg.channelId}>` : '`Not set`';
-    const role = cfg.roleId ? `<@&${cfg.roleId}>` : '`Not set`';
+function buildDashboardEmbed(cfg, guild, verifiedUserCount = 0, conflictSummary = '', lang) {
+    const channel = cfg.channelId ? `<#${cfg.channelId}>` : t(lang, 'wolf.cmd.verification.admin.dashboard.notSet');
+    const role = cfg.roleId ? `<@&${cfg.roleId}>` : t(lang, 'wolf.cmd.verification.admin.dashboard.notSet');
     const rawMsg = cfg.message || botConfig.verification.defaultMessage;
     const msgPreview = `\`${rawMsg.length > 60 ? rawMsg.substring(0, 60) + '…' : rawMsg}\``;
-    const buttonText = cfg.buttonText || botConfig.verification.defaultButtonText;
+    const buttonText = cfg.buttonText || t(lang, 'wolf.cmd.verification.admin.livePanelDefaultButtonText');
 
     const embed = new EmbedBuilder()
-        .setTitle('🔒 Verification System Dashboard')
-        .setDescription(`Manage verification settings for **${guild.name}**.\nSelect an option below to modify a setting.`)
+        .setTitle(t(lang, 'wolf.cmd.verification.admin.dashboard.title'))
+        .setDescription(t(lang, 'wolf.cmd.verification.admin.dashboard.description', { guild: guild.name }))
         .setColor(getColor('info'))
         .addFields(
-            { name: '📢 Verification Channel', value: channel, inline: true },
-            { name: '🏷️ Verified Role', value: role, inline: true },
-            { name: '⚙️ System Status', value: cfg.enabled !== false ? '✅ Enabled' : '❌ Disabled', inline: true },
-            { name: '🔘 Button Text', value: `\`${buttonText}\``, inline: true },
-            { name: '👥 Verified Users', value: `${verifiedUserCount} users`, inline: true },
+            { name: t(lang, 'wolf.cmd.verification.admin.dashboard.fieldChannel'), value: channel, inline: true },
+            { name: t(lang, 'wolf.cmd.verification.admin.dashboard.fieldRole'), value: role, inline: true },
+            { name: t(lang, 'wolf.cmd.verification.admin.dashboard.fieldStatus'), value: cfg.enabled !== false ? t(lang, 'wolf.cmd.verification.admin.dashboard.enabled') : t(lang, 'wolf.cmd.verification.admin.dashboard.disabled'), inline: true },
+            { name: t(lang, 'wolf.cmd.verification.admin.dashboard.fieldButtonText'), value: `\`${buttonText}\``, inline: true },
+            { name: t(lang, 'wolf.cmd.verification.admin.dashboard.fieldUsers'), value: t(lang, 'wolf.cmd.verification.admin.dashboard.usersCount', { count: verifiedUserCount }), inline: true },
             { name: '\u200B', value: '\u200B', inline: true },
-            { name: '💬 Verification Message', value: msgPreview, inline: false },
+            { name: t(lang, 'wolf.cmd.verification.admin.dashboard.fieldMessage'), value: msgPreview, inline: false },
         );
 
     if (conflictSummary) {
-        embed.addFields({ name: '⚠️ Setup Conflicts', value: conflictSummary, inline: false });
+        embed.addFields({ name: t(lang, 'wolf.cmd.verification.admin.dashboard.fieldConflicts'), value: conflictSummary, inline: false });
     }
 
     return embed
-        .setFooter({ text: 'Dashboard closes after 10 minutes of inactivity' })
+        .setFooter({ text: t(lang, 'wolf.cmd.verification.admin.dashboard.footer') })
         .setTimestamp();
 }
 
-function buildSelectMenu(guildId) {
+function buildSelectMenu(guildId, lang) {
     return new StringSelectMenuBuilder()
         .setCustomId(`verif_cfg_${guildId}`)
-        .setPlaceholder('Select a setting to configure...')
+        .setPlaceholder(t(lang, 'wolf.cmd.verification.admin.dashboard.placeholder'))
         .addOptions(
             new StringSelectMenuOptionBuilder()
-                .setLabel('Change Verification Channel')
-                .setDescription('Set the channel where the verification panel is posted')
+                .setLabel(t(lang, 'wolf.cmd.verification.admin.dashboard.optChannelLabel'))
+                .setDescription(t(lang, 'wolf.cmd.verification.admin.dashboard.optChannelDesc'))
                 .setValue('channel')
                 .setEmoji('📢'),
             new StringSelectMenuOptionBuilder()
-                .setLabel('Change Verified Role')
-                .setDescription('Set the role assigned when a user verifies')
+                .setLabel(t(lang, 'wolf.cmd.verification.admin.dashboard.optRoleLabel'))
+                .setDescription(t(lang, 'wolf.cmd.verification.admin.dashboard.optRoleDesc'))
                 .setValue('role')
                 .setEmoji('🏷️'),
             new StringSelectMenuOptionBuilder()
-                .setLabel('Edit Verification Message')
-                .setDescription('Customise the message shown on the verification panel embed')
+                .setLabel(t(lang, 'wolf.cmd.verification.admin.dashboard.optMessageLabel'))
+                .setDescription(t(lang, 'wolf.cmd.verification.admin.dashboard.optMessageDesc'))
                 .setValue('message')
                 .setEmoji('💬'),
             new StringSelectMenuOptionBuilder()
-                .setLabel('Edit Button Text')
-                .setDescription('Change the label on the verify button')
+                .setLabel(t(lang, 'wolf.cmd.verification.admin.dashboard.optButtonLabel'))
+                .setDescription(t(lang, 'wolf.cmd.verification.admin.dashboard.optButtonDesc'))
                 .setValue('button_text')
                 .setEmoji('🔘'),
         );
 }
 
-function buildButtonRow(cfg, guildId, disabled = false) {
+function buildButtonRow(cfg, guildId, disabled = false, lang) {
     const systemOn = cfg.enabled !== false;
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`verif_cfg_toggle_${guildId}`)
-            .setLabel('Verification')
+            .setLabel(t(lang, 'wolf.cmd.verification.admin.dashboard.btnToggle'))
             .setStyle(systemOn ? ButtonStyle.Success : ButtonStyle.Danger)
             .setEmoji('🔒')
             .setDisabled(disabled),
@@ -126,9 +127,9 @@ function buildButtonRow(cfg, guildId, disabled = false) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function refreshDashboard(rootInteraction, cfg, guildId, client) {
+async function refreshDashboard(rootInteraction, cfg, guildId, client, lang) {
     try {
-        const selectMenu = buildSelectMenu(guildId);
+        const selectMenu = buildSelectMenu(guildId, lang);
         
         // Get verified user count and conflict summary
         let verifiedUserCount = 0;
@@ -146,8 +147,8 @@ async function refreshDashboard(rootInteraction, cfg, guildId, client) {
             const autoRoleConfigured = Boolean(guildConfig.autoRole) || (Array.isArray(welcomeConfig.roleIds) && welcomeConfig.roleIds.length > 0);
             
             const conflicts = [
-                autoVerifyEnabled ? 'AutoVerify is enabled' : null,
-                autoRoleConfigured ? 'AutoRole is configured' : null
+                autoVerifyEnabled ? t(lang, 'wolf.cmd.verification.admin.dashboard.conflictAutoVerify') : null,
+                autoRoleConfigured ? t(lang, 'wolf.cmd.verification.admin.dashboard.conflictAutoRole') : null
             ].filter(Boolean);
             
             if (conflicts.length > 0) {
@@ -158,9 +159,9 @@ async function refreshDashboard(rootInteraction, cfg, guildId, client) {
         }
         
         await InteractionHelper.safeEditReply(rootInteraction, {
-            embeds: [buildDashboardEmbed(cfg, rootInteraction.guild, verifiedUserCount, conflictSummary)],
+            embeds: [buildDashboardEmbed(cfg, rootInteraction.guild, verifiedUserCount, conflictSummary, lang)],
             components: [
-                buildButtonRow(cfg, guildId),
+                buildButtonRow(cfg, guildId, false, lang),
                 new ActionRowBuilder().addComponents(selectMenu),
             ],
             flags: MessageFlags.Ephemeral,
@@ -178,18 +179,19 @@ export default {
             const guildId = interaction.guild.id;
             const guildConfig = await getGuildConfig(client, guildId);
             const cfg = guildConfig.verification;
+            const lang = pickLanguage(config, interaction.guild);
 
             if (!cfg?.channelId) {
                 throw new TitanBotError(
                     'Verification not configured',
                     ErrorTypes.CONFIGURATION,
-                    'The verification system has not been set up yet. Run `/verification setup` first.',
+                    t(lang, 'wolf.cmd.verification.admin.dashboard.notConfiguredDesc'),
                 );
             }
 
             await InteractionHelper.safeDefer(interaction, { flags: MessageFlags.Ephemeral });
 
-            const selectMenu = buildSelectMenu(guildId);
+            const selectMenu = buildSelectMenu(guildId, lang);
 
             // Get verified user count and conflict summary
             let verifiedUserCount = 0;
@@ -206,8 +208,8 @@ export default {
                 const autoRoleConfigured = Boolean(guildConfig.autoRole) || (Array.isArray(welcomeConfig.roleIds) && welcomeConfig.roleIds.length > 0);
                 
                 const conflicts = [
-                    autoVerifyEnabled ? 'AutoVerify is enabled' : null,
-                    autoRoleConfigured ? 'AutoRole is configured' : null
+                    autoVerifyEnabled ? t(lang, 'wolf.cmd.verification.admin.dashboard.conflictAutoVerify') : null,
+                    autoRoleConfigured ? t(lang, 'wolf.cmd.verification.admin.dashboard.conflictAutoRole') : null
                 ].filter(Boolean);
                 
                 if (conflicts.length > 0) {
@@ -218,9 +220,9 @@ export default {
             }
 
             await InteractionHelper.safeEditReply(interaction, {
-                embeds: [buildDashboardEmbed(cfg, interaction.guild, verifiedUserCount, conflictSummary)],
+                embeds: [buildDashboardEmbed(cfg, interaction.guild, verifiedUserCount, conflictSummary, lang)],
                 components: [
-                    buildButtonRow(cfg, guildId),
+                    buildButtonRow(cfg, guildId, false, lang),
                     new ActionRowBuilder().addComponents(selectMenu),
                 ],
                 flags: MessageFlags.Ephemeral,
@@ -238,16 +240,16 @@ export default {
                 try {
                     switch (selectedOption) {
                         case 'channel':
-                            await handleChannel(selectInteraction, interaction, cfg, guildId, client);
+                            await handleChannel(selectInteraction, interaction, cfg, guildId, client, lang);
                             break;
                         case 'role':
-                            await handleRole(selectInteraction, interaction, cfg, guildId, client);
+                            await handleRole(selectInteraction, interaction, cfg, guildId, client, lang);
                             break;
                         case 'message':
-                            await handleMessage(selectInteraction, interaction, cfg, guildId, client);
+                            await handleMessage(selectInteraction, interaction, cfg, guildId, client, lang);
                             break;
                         case 'button_text':
-                            await handleButtonText(selectInteraction, interaction, cfg, guildId, client);
+                            await handleButtonText(selectInteraction, interaction, cfg, guildId, client, lang);
                             break;
                     }
                 } catch (error) {
@@ -259,8 +261,8 @@ export default {
 
                     const errorMessage =
                         error instanceof TitanBotError
-                            ? error.userMessage || 'An error occurred while processing your selection.'
-                            : 'An unexpected error occurred while updating the configuration.';
+                            ? error.userMessage || t(lang, 'wolf.cmd.verification.admin.dashboard.errProcessing')
+                            : t(lang, 'wolf.cmd.verification.admin.dashboard.errUpdating');
 
                     if (!selectInteraction.replied && !selectInteraction.deferred) {
                         await selectInteraction.deferUpdate().catch(() => {});
@@ -268,7 +270,7 @@ export default {
 
                     await selectInteraction
                         .followUp({
-                            embeds: [errorEmbed('Configuration Error', errorMessage)],
+                            embeds: [errorEmbed(t(lang, 'wolf.cmd.verification.admin.dashboard.errTitle'), errorMessage)],
                             flags: MessageFlags.Ephemeral,
                         })
                         .catch(() => {});
@@ -299,8 +301,8 @@ export default {
                 if (!wasEnabled && autoVerifyEnabled) {
                     await btnInteraction.followUp({
                         embeds: [errorEmbed(
-                            '❌ Cannot Enable Verification',
-                            'AutoVerify is currently enabled. Please disable AutoVerify first before enabling the manual Verification system.\n\nRun `/autoverify` to access the AutoVerify dashboard.'
+                            t(lang, 'wolf.cmd.verification.admin.dashboard.errCannotEnableTitle'),
+                            t(lang, 'wolf.cmd.verification.admin.dashboard.errCannotEnableDesc')
                         )],
                         flags: MessageFlags.Ephemeral,
                     });
@@ -328,14 +330,14 @@ export default {
                     if (channel) {
                         try {
                             const verifyEmbed = new EmbedBuilder()
-                                .setTitle('✅ Server Verification')
+                                .setTitle(t(lang, 'wolf.cmd.verification.admin.livePanelTitle'))
                                 .setDescription(cfg.message || botConfig.verification.defaultMessage)
                                 .setColor(getColor('success'));
 
                             const verifyButton = new ActionRowBuilder().addComponents(
                                 new ButtonBuilder()
                                     .setCustomId('verify_user')
-                                    .setLabel(cfg.buttonText || botConfig.verification.defaultButtonText)
+                                    .setLabel(cfg.buttonText || t(lang, 'wolf.cmd.verification.admin.livePanelDefaultButtonText'))
                                     .setStyle(ButtonStyle.Success)
                                     .setEmoji('✅'),
                             );
@@ -355,14 +357,14 @@ export default {
                 await btnInteraction.followUp({
                     embeds: [
                         successEmbed(
-                            '✅ System Updated',
-                            `The verification system is now **${cfg.enabled ? 'enabled' : 'disabled'}**.`,
+                            t(lang, 'wolf.cmd.verification.admin.dashboard.statusUpdatedTitle'),
+                            t(lang, 'wolf.cmd.verification.admin.dashboard.statusUpdatedDesc', { status: cfg.enabled ? t(lang, 'wolf.cmd.verification.admin.dashboard.enabled') : t(lang, 'wolf.cmd.verification.admin.dashboard.disabled') }),
                         ),
                     ],
                     flags: MessageFlags.Ephemeral,
                 });
 
-                await refreshDashboard(interaction, cfg, guildId, client);
+                await refreshDashboard(interaction, cfg, guildId, client, lang);
             });
 
             collector.on('end', async (collected, reason) => {
@@ -372,8 +374,8 @@ export default {
                         await InteractionHelper.safeEditReply(interaction, {
                             embeds: [
                                 new EmbedBuilder()
-                                    .setTitle('⏰ Dashboard Timed Out')
-                                    .setDescription('This dashboard has been closed due to inactivity. Please run the command again to continue.')
+                                    .setTitle(t(lang, 'wolf.cmd.verification.admin.dashboard.timeoutTitle'))
+                                    .setDescription(t(lang, 'wolf.cmd.verification.admin.dashboard.timeoutDesc'))
                                     .setColor(getColor('error'))
                             ],
                             components: [],
@@ -398,21 +400,21 @@ export default {
 
 // ─── Change Verification Channel ─────────────────────────────────────────────
 
-async function handleChannel(selectInteraction, rootInteraction, cfg, guildId, client) {
+async function handleChannel(selectInteraction, rootInteraction, cfg, guildId, client, lang) {
     await selectInteraction.deferUpdate();
 
     const channelSelect = new ChannelSelectMenuBuilder()
         .setCustomId('verif_cfg_channel')
-        .setPlaceholder('Select a text channel...')
+        .setPlaceholder(t(lang, 'wolf.cmd.verification.admin.dashboard.actionChanPlaceholder'))
         .addChannelTypes(ChannelType.GuildText)
         .setMaxValues(1);
 
     await selectInteraction.followUp({
         embeds: [
             new EmbedBuilder()
-                .setTitle('📢 Change Verification Channel')
+                .setTitle(t(lang, 'wolf.cmd.verification.admin.dashboard.actionChanTitle'))
                 .setDescription(
-                    `**Current:** ${cfg.channelId ? `<#${cfg.channelId}>` : '`Not set`'}\n\nSelect the channel where the verification panel will be posted.\n\n> ⚠️ The existing panel will be deleted and re-posted in the new channel.`,
+                    t(lang, 'wolf.cmd.verification.admin.dashboard.actionChanDesc', { current: cfg.channelId ? `<#${cfg.channelId}>` : t(lang, 'wolf.cmd.verification.admin.dashboard.notSet') }),
                 )
                 .setColor(getColor('info')),
         ],
@@ -436,8 +438,8 @@ async function handleChannel(selectInteraction, rootInteraction, cfg, guildId, c
             await chanInteraction.followUp({
                 embeds: [
                     errorEmbed(
-                        'Missing Permissions',
-                        `I need **View Channel**, **Send Messages**, and **Embed Links** permissions in ${newChannel}.`,
+                        t(lang, 'wolf.cmd.verification.admin.dashboard.errTitle'),
+                        t(lang, 'wolf.cmd.verification.admin.channelPermsError'),
                     ),
                 ],
                 flags: MessageFlags.Ephemeral,
@@ -462,14 +464,14 @@ async function handleChannel(selectInteraction, rootInteraction, cfg, guildId, c
         if (cfg.enabled !== false) {
             try {
                 const verifyEmbed = new EmbedBuilder()
-                    .setTitle('✅ Server Verification')
+                    .setTitle(t(lang, 'wolf.cmd.verification.admin.livePanelTitle'))
                     .setDescription(cfg.message || botConfig.verification.defaultMessage)
                     .setColor(getColor('success'));
 
                 const verifyButton = new ActionRowBuilder().addComponents(
                     new ButtonBuilder()
                         .setCustomId('verify_user')
-                        .setLabel(cfg.buttonText || botConfig.verification.defaultButtonText)
+                        .setLabel(cfg.buttonText || t(lang, 'wolf.cmd.verification.admin.livePanelDefaultButtonText'))
                         .setStyle(ButtonStyle.Success)
                         .setEmoji('✅'),
                 );
@@ -487,18 +489,24 @@ async function handleChannel(selectInteraction, rootInteraction, cfg, guildId, c
         await setGuildConfig(client, guildId, latestConfig);
 
         await chanInteraction.followUp({
-            embeds: [successEmbed('✅ Channel Updated', `Verification panel moved to ${newChannel}.`)],
+            embeds: [successEmbed(
+                t(lang, 'wolf.cmd.verification.admin.dashboard.actionChanSuccessTitle'),
+                t(lang, 'wolf.cmd.verification.admin.dashboard.actionChanSuccessDesc', { channel: `${newChannel}` })
+            )],
             flags: MessageFlags.Ephemeral,
         });
 
-        await refreshDashboard(rootInteraction, cfg, guildId, client);
+        await refreshDashboard(rootInteraction, cfg, guildId, client, lang);
     });
 
     chanCollector.on('end', (collected, reason) => {
         if (reason === 'time' && collected.size === 0) {
             selectInteraction
                 .followUp({
-                    embeds: [errorEmbed('Timed Out', 'No channel was selected. The setting was not changed.')],
+                    embeds: [errorEmbed(
+                        t(lang, 'wolf.cmd.verification.admin.dashboard.actionChanTimeoutTitle'),
+                        t(lang, 'wolf.cmd.verification.admin.dashboard.actionChanTimeoutDesc')
+                    )],
                     flags: MessageFlags.Ephemeral,
                 })
                 .catch(() => {});
@@ -508,20 +516,20 @@ async function handleChannel(selectInteraction, rootInteraction, cfg, guildId, c
 
 // ─── Change Verified Role ─────────────────────────────────────────────────────
 
-async function handleRole(selectInteraction, rootInteraction, cfg, guildId, client) {
+async function handleRole(selectInteraction, rootInteraction, cfg, guildId, client, lang) {
     await selectInteraction.deferUpdate();
 
     const roleSelect = new RoleSelectMenuBuilder()
         .setCustomId('verif_cfg_role')
-        .setPlaceholder('Select a role...')
+        .setPlaceholder(t(lang, 'wolf.cmd.verification.admin.dashboard.actionRolePlaceholder'))
         .setMaxValues(1);
 
     await selectInteraction.followUp({
         embeds: [
             new EmbedBuilder()
-                .setTitle('🏷️ Change Verified Role')
+                .setTitle(t(lang, 'wolf.cmd.verification.admin.dashboard.actionRoleTitle'))
                 .setDescription(
-                    `**Current:** ${cfg.roleId ? `<@&${cfg.roleId}>` : '`Not set`'}\n\nSelect the role to assign when a user verifies.`,
+                    t(lang, 'wolf.cmd.verification.admin.dashboard.actionRoleDesc', { current: cfg.roleId ? `<@&${cfg.roleId}>` : t(lang, 'wolf.cmd.verification.admin.dashboard.notSet') }),
                 )
                 .setColor(getColor('info')),
         ],
@@ -547,8 +555,8 @@ async function handleRole(selectInteraction, rootInteraction, cfg, guildId, clie
             await roleInteraction.followUp({
                 embeds: [
                     errorEmbed(
-                        'Invalid Role',
-                        'Please choose a normal assignable role (not @everyone or a bot-managed role).',
+                        t(lang, 'wolf.cmd.verification.admin.dashboard.errTitle'),
+                        t(lang, 'wolf.cmd.verification.admin.invalidRoleError'),
                     ),
                 ],
                 flags: MessageFlags.Ephemeral,
@@ -560,8 +568,8 @@ async function handleRole(selectInteraction, rootInteraction, cfg, guildId, clie
             await roleInteraction.followUp({
                 embeds: [
                     errorEmbed(
-                        'Role Too High',
-                        'The verified role must be below my highest role in the server role hierarchy.',
+                        t(lang, 'wolf.cmd.verification.admin.dashboard.errTitle'),
+                        t(lang, 'wolf.cmd.verification.admin.roleHierarchyError'),
                     ),
                 ],
                 flags: MessageFlags.Ephemeral,
@@ -575,18 +583,24 @@ async function handleRole(selectInteraction, rootInteraction, cfg, guildId, clie
         await setGuildConfig(client, guildId, latestConfig);
 
         await roleInteraction.followUp({
-            embeds: [successEmbed('✅ Role Updated', `Verified role set to ${role}.`)],
+            embeds: [successEmbed(
+                t(lang, 'wolf.cmd.verification.admin.dashboard.actionRoleSuccessTitle'),
+                t(lang, 'wolf.cmd.verification.admin.dashboard.actionRoleSuccessDesc', { role: `${role}` })
+            )],
             flags: MessageFlags.Ephemeral,
         });
 
-        await refreshDashboard(rootInteraction, cfg, guildId, client);
+        await refreshDashboard(rootInteraction, cfg, guildId, client, lang);
     });
 
     roleCollector.on('end', (collected, reason) => {
         if (reason === 'time' && collected.size === 0) {
             selectInteraction
                 .followUp({
-                    embeds: [errorEmbed('Timed Out', 'No role was selected. The setting was not changed.')],
+                    embeds: [errorEmbed(
+                        t(lang, 'wolf.cmd.verification.admin.dashboard.actionRoleTimeoutTitle'),
+                        t(lang, 'wolf.cmd.verification.admin.dashboard.actionRoleTimeoutDesc')
+                    )],
                     flags: MessageFlags.Ephemeral,
                 })
                 .catch(() => {});
@@ -596,16 +610,16 @@ async function handleRole(selectInteraction, rootInteraction, cfg, guildId, clie
 
 // ─── Edit Verification Message ────────────────────────────────────────────────
 
-async function handleMessage(selectInteraction, rootInteraction, cfg, guildId, client) {
+async function handleMessage(selectInteraction, rootInteraction, cfg, guildId, client, lang) {
     try {
         const modal = new ModalBuilder()
             .setCustomId('verif_cfg_message')
-            .setTitle('Edit Verification Message')
+            .setTitle(t(lang, 'wolf.cmd.verification.admin.dashboard.actionMsgModalTitle'))
             .addComponents(
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
                         .setCustomId('message_input')
-                        .setLabel('Message shown on the verification panel embed')
+                        .setLabel(t(lang, 'wolf.cmd.verification.admin.dashboard.actionMsgInputLabel'))
                         .setStyle(TextInputStyle.Paragraph)
                         .setValue(cfg.message || botConfig.verification.defaultMessage)
                         .setMaxLength(2000)
@@ -632,14 +646,17 @@ async function handleMessage(selectInteraction, rootInteraction, cfg, guildId, c
         latestConfig.verification = cfg;
         await setGuildConfig(client, guildId, latestConfig);
 
-        await updateLivePanel(rootInteraction.guild, cfg);
+        await updateLivePanel(rootInteraction.guild, cfg, lang);
 
         await submitted.reply({
-            embeds: [successEmbed('✅ Message Updated', 'The verification panel has been updated with the new message.')],
+            embeds: [successEmbed(
+                t(lang, 'wolf.cmd.verification.admin.dashboard.actionMsgSuccessTitle'),
+                t(lang, 'wolf.cmd.verification.admin.dashboard.actionMsgSuccessDesc')
+            )],
             flags: MessageFlags.Ephemeral,
         });
 
-        await refreshDashboard(rootInteraction, cfg, guildId, client);
+        await refreshDashboard(rootInteraction, cfg, guildId, client, lang);
     } catch (error) {
         logger.error('Error in handleMessage:', error);
         // Silently fail - modal display failed, user can try again
@@ -648,16 +665,16 @@ async function handleMessage(selectInteraction, rootInteraction, cfg, guildId, c
 
 // ─── Edit Button Text ─────────────────────────────────────────────────────────
 
-async function handleButtonText(selectInteraction, rootInteraction, cfg, guildId, client) {
+async function handleButtonText(selectInteraction, rootInteraction, cfg, guildId, client, lang) {
     try {
         const modal = new ModalBuilder()
             .setCustomId('verif_cfg_button_text')
-            .setTitle('Edit Button Text')
+            .setTitle(t(lang, 'wolf.cmd.verification.admin.dashboard.actionBtnModalTitle'))
             .addComponents(
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
                         .setCustomId('button_text_input')
-                        .setLabel('Button label (max 80 characters)')
+                        .setLabel(t(lang, 'wolf.cmd.verification.admin.dashboard.actionBtnInputLabel'))
                         .setStyle(TextInputStyle.Short)
                         .setValue(cfg.buttonText || botConfig.verification.defaultButtonText)
                         .setMaxLength(80)
@@ -684,14 +701,17 @@ async function handleButtonText(selectInteraction, rootInteraction, cfg, guildId
         latestConfig.verification = cfg;
         await setGuildConfig(client, guildId, latestConfig);
 
-        await updateLivePanel(rootInteraction.guild, cfg);
+        await updateLivePanel(rootInteraction.guild, cfg, lang);
 
         await submitted.reply({
-            embeds: [successEmbed('✅ Button Text Updated', `The verify button now reads **${cfg.buttonText}**.`)],
+            embeds: [successEmbed(
+                t(lang, 'wolf.cmd.verification.admin.dashboard.actionBtnSuccessTitle'),
+                t(lang, 'wolf.cmd.verification.admin.dashboard.actionBtnSuccessDesc', { text: cfg.buttonText })
+            )],
             flags: MessageFlags.Ephemeral,
         });
 
-        await refreshDashboard(rootInteraction, cfg, guildId, client);
+        await refreshDashboard(rootInteraction, cfg, guildId, client, lang);
     } catch (error) {
         logger.error('Error in handleButtonText:', error);
         // Silently fail - modal display failed, user can try again

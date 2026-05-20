@@ -8,6 +8,7 @@ import { logger } from '../../../utils/logger.js';
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
 import { getWelcomeConfig } from '../../../utils/database.js';
 import autoVerifyDashboard from './autoVerifyDashboard.js';
+import { t, pickLanguage } from '../../../services/i18n.js';
 
 const autoVerifyDefaults = botConfig.verification?.autoVerify || {};
 const minAccountAgeDays = autoVerifyDefaults.minAccountAge ?? 1;
@@ -55,20 +56,21 @@ export default {
         ),
 
     async execute(interaction, config, client) {
+        const lang = pickLanguage(config, interaction.guild);
         const wrappedExecute = withErrorHandling(async () => {
             const subcommand = interaction.options.getSubcommand();
             const guild = interaction.guild;
 
             switch (subcommand) {
                 case "setup":
-                    return await handleSetup(interaction, guild, client);
+                    return await handleSetup(interaction, guild, client, lang);
                 case "dashboard":
                     return await autoVerifyDashboard.execute(interaction, config, client);
                 default:
                     throw createError(
                         `Unknown subcommand: ${subcommand}`,
                         ErrorTypes.VALIDATION,
-                        "Invalid subcommand selected.",
+                        t(lang, 'wolf.cmd.verification.admin.invalidSubcommand'),
                         { subcommand }
                     );
             }
@@ -78,7 +80,7 @@ export default {
     }
 };
 
-async function handleSetup(interaction, guild, client) {
+async function handleSetup(interaction, guild, client, lang) {
     const criteria = interaction.options.getString("criteria");
     const accountAgeDays = interaction.options.getInteger("account_age_days") || defaultAccountAgeDays;
     const targetRole = interaction.options.getRole("role");
@@ -95,7 +97,7 @@ async function handleSetup(interaction, guild, client) {
             throw createError(
                 'Auto-verify enable blocked by conflicting onboarding system',
                 ErrorTypes.CONFIGURATION,
-                'You cannot enable **AutoVerify** while the verification system or AutoRole is configured. Disable those first.',
+                t(lang, 'wolf.cmd.autoverify.admin.conflictingSystemsError'),
                 {
                     guildId: guild.id,
                     verificationEnabled,
@@ -111,7 +113,7 @@ async function handleSetup(interaction, guild, client) {
             throw createError(
                 'Bot member not found in guild cache',
                 ErrorTypes.CONFIGURATION,
-                'I could not verify my permissions in this server. Please try again in a moment.',
+                t(lang, 'wolf.cmd.verification.admin.botPermsError'),
                 { guildId: guild.id }
             );
         }
@@ -120,7 +122,7 @@ async function handleSetup(interaction, guild, client) {
             throw createError(
                 'Missing ManageRoles permission',
                 ErrorTypes.PERMISSION,
-                "I need the 'Manage Roles' permission to assign auto-verify roles.",
+                t(lang, 'wolf.cmd.autoverify.admin.manageRolesError'),
                 { guildId: guild.id }
             );
         }
@@ -129,7 +131,7 @@ async function handleSetup(interaction, guild, client) {
             throw createError(
                 'Invalid auto-verify role selected',
                 ErrorTypes.VALIDATION,
-                'Please choose a normal assignable role (not @everyone or an integration-managed role).',
+                t(lang, 'wolf.cmd.verification.admin.invalidRoleError'),
                 { guildId: guild.id, roleId: targetRole.id, managed: targetRole.managed }
             );
         }
@@ -138,7 +140,7 @@ async function handleSetup(interaction, guild, client) {
             throw createError(
                 'Role hierarchy error for auto-verify setup',
                 ErrorTypes.PERMISSION,
-                'The selected auto-verify role must be below my highest role in the server role hierarchy.',
+                t(lang, 'wolf.cmd.autoverify.admin.roleHierarchyError'),
                 { guildId: guild.id, roleId: targetRole.id, rolePosition: targetRole.position, botRolePosition: botMember.roles.highest.position }
             );
         }
@@ -163,10 +165,10 @@ async function handleSetup(interaction, guild, client) {
         let criteriaDescription = "";
         switch (criteria) {
             case "account_age":
-                criteriaDescription = `\`${accountAgeDays} days\` old`;
+                criteriaDescription = t(lang, 'wolf.cmd.autoverify.admin.criteriaAgeDesc', { days: accountAgeDays });
                 break;
             case "none":
-                criteriaDescription = "All users immediately";
+                criteriaDescription = t(lang, 'wolf.cmd.autoverify.admin.criteriaNoneDesc');
                 break;
         }
 
@@ -179,8 +181,8 @@ async function handleSetup(interaction, guild, client) {
 
         await InteractionHelper.safeEditReply(interaction, {
             embeds: [successEmbed(
-                "Auto-Verification Configured",
-                `Automatic verification has been configured!\n\n**Role:** ${targetRole}\n**Criteria:** ${criteriaDescription}\n\nUsers who meet these criteria will receive this role when they join the server.`
+                t(lang, 'wolf.cmd.autoverify.admin.setupSuccessTitle'),
+                t(lang, 'wolf.cmd.autoverify.admin.setupSuccessDesc', { role: targetRole, criteria: criteriaDescription })
             )]
         });
 

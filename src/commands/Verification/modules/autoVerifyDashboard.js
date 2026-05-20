@@ -21,6 +21,7 @@ import { getGuildConfig, setGuildConfig } from '../../../services/guildConfig.js
 import { getWelcomeConfig } from '../../../utils/database.js';
 import { validateAutoVerifyCriteria } from '../../../services/verificationService.js';
 import { botHasPermission } from '../../../utils/permissionGuard.js';
+import { t, pickLanguage } from '../../../services/i18n.js';
 
 const autoVerifyDefaults = botConfig.verification?.autoVerify || {};
 const minAccountAgeDays = autoVerifyDefaults.minAccountAge ?? 1;
@@ -29,74 +30,74 @@ const defaultAccountAgeDays = autoVerifyDefaults.defaultAccountAgeDays ?? 7;
 
 // ─── Embed & Menu Builders ────────────────────────────────────────────────────
 
-function buildDashboardEmbed(cfg, guild, conflictSummary = '') {
+function buildDashboardEmbed(cfg, guild, conflictSummary = '', lang) {
     const autoVerify = cfg.verification?.autoVerify;
     const autoVerifyRole = autoVerify?.roleId ? guild.roles.cache.get(autoVerify.roleId) : null;
     
-    let criteriaDescription = "`Not configured`";
+    let criteriaDescription = `\`${t(lang, 'wolf.cmd.verification.dashboard.notSet')}\``;
     if (autoVerify?.criteria) {
         switch (autoVerify.criteria) {
             case "account_age":
-                criteriaDescription = `\`Account Age\` - \`${autoVerify.accountAgeDays} days\``;
+                criteriaDescription = t(lang, 'wolf.cmd.autoverify.dashboard.criteriaAge', { days: autoVerify.accountAgeDays });
                 break;
             case "none":
-                criteriaDescription = `\`No Criteria\``;
+                criteriaDescription = t(lang, 'wolf.cmd.autoverify.dashboard.criteriaNone');
                 break;
         }
     }
 
     const embed = new EmbedBuilder()
-        .setTitle('🤖 Auto-Verification Dashboard')
-        .setDescription(`Manage auto-verification settings for **${guild.name}**.\nSelect an option below to modify a setting.`)
+        .setTitle(t(lang, 'wolf.cmd.autoverify.dashboard.title'))
+        .setDescription(t(lang, 'wolf.cmd.autoverify.dashboard.description', { guild: guild.name }))
         .setColor(getColor('info'))
         .addFields(
-            { name: '⚙️ System Status', value: autoVerify?.enabled ? '✅ Enabled' : '❌ Disabled', inline: true },
-            { name: '🏷️ Target Role', value: autoVerifyRole ? autoVerifyRole.toString() : '`Not set`', inline: true },
-            { name: '🎯 Criteria', value: criteriaDescription, inline: true },
-            { name: '📅 Account Age', value: autoVerify?.accountAgeDays ? `\`${autoVerify.accountAgeDays}\` days` : '`N/A`', inline: true },
+            { name: t(lang, 'wolf.cmd.verification.dashboard.fieldStatus'), value: autoVerify?.enabled ? t(lang, 'wolf.cmd.verification.dashboard.enabled') : t(lang, 'wolf.cmd.verification.dashboard.disabled'), inline: true },
+            { name: t(lang, 'wolf.cmd.verification.dashboard.fieldRole'), value: autoVerifyRole ? autoVerifyRole.toString() : `\`${t(lang, 'wolf.cmd.verification.dashboard.notSet')}\``, inline: true },
+            { name: t(lang, 'wolf.cmd.autoverify.dashboard.criteriaTitle'), value: criteriaDescription, inline: true },
+            { name: t(lang, 'wolf.cmd.autoverify.dashboard.fieldAge'), value: autoVerify?.accountAgeDays ? t(lang, 'wolf.cmd.autoverify.dashboard.ageDaysValue', { days: autoVerify.accountAgeDays }) : t(lang, 'wolf.cmd.autoverify.dashboard.na'), inline: true },
             { name: '\u200B', value: '\u200B', inline: true },
             { name: '\u200B', value: '\u200B', inline: true },
         );
 
     if (conflictSummary) {
-        embed.addFields({ name: '⚠️ Setup Conflicts', value: conflictSummary, inline: false });
+        embed.addFields({ name: t(lang, 'wolf.cmd.verification.dashboard.fieldConflicts'), value: conflictSummary, inline: false });
     }
 
     return embed
-        .setFooter({ text: 'Dashboard closes after 10 minutes of inactivity' })
+        .setFooter({ text: t(lang, 'wolf.cmd.verification.dashboard.footer') })
         .setTimestamp();
 }
 
-function buildSelectMenu(guildId) {
+function buildSelectMenu(guildId, lang) {
     return new StringSelectMenuBuilder()
         .setCustomId(`autoverify_cfg_${guildId}`)
-        .setPlaceholder('Select a setting to configure...')
+        .setPlaceholder(t(lang, 'wolf.cmd.verification.dashboard.placeholder'))
         .addOptions(
             new StringSelectMenuOptionBuilder()
-                .setLabel('Change Role')
-                .setDescription('Select the role to assign automatically')
+                .setLabel(t(lang, 'wolf.cmd.autoverify.dashboard.optRoleLabel'))
+                .setDescription(t(lang, 'wolf.cmd.autoverify.dashboard.optRoleDesc'))
                 .setValue('role')
                 .setEmoji('🏷️'),
             new StringSelectMenuOptionBuilder()
-                .setLabel('Edit Account Age Days')
-                .setDescription('Set minimum account age in days')
+                .setLabel(t(lang, 'wolf.cmd.autoverify.dashboard.optAgeLabel'))
+                .setDescription(t(lang, 'wolf.cmd.autoverify.dashboard.optAgeDesc'))
                 .setValue('account_age')
                 .setEmoji('📅'),
         );
 }
 
-function buildButtonRow(cfg, guildId, disabled = false) {
+function buildButtonRow(cfg, guildId, disabled = false, lang) {
     const autoVerifyOn = cfg.verification?.autoVerify?.enabled === true;
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`autoverify_cfg_criteria_${guildId}`)
-            .setLabel('Change Criteria')
+            .setLabel(t(lang, 'wolf.cmd.autoverify.dashboard.btnCriteria'))
             .setStyle(ButtonStyle.Primary)
             .setEmoji('🎯')
             .setDisabled(disabled),
         new ButtonBuilder()
             .setCustomId(`autoverify_cfg_toggle_${guildId}`)
-            .setLabel('Auto-Verification')
+            .setLabel(t(lang, 'wolf.cmd.autoverify.dashboard.btnToggle'))
             .setStyle(autoVerifyOn ? ButtonStyle.Success : ButtonStyle.Danger)
             .setEmoji('🤖')
             .setDisabled(disabled),
@@ -107,7 +108,8 @@ function buildButtonRow(cfg, guildId, disabled = false) {
 
 async function refreshDashboard(rootInteraction, cfg, guildId, client) {
     try {
-        const selectMenu = buildSelectMenu(guildId);
+        const lang = pickLanguage(cfg, rootInteraction.guild);
+        const selectMenu = buildSelectMenu(guildId, lang);
         
         // Get conflict summary
         let conflictSummary = '';
@@ -117,8 +119,8 @@ async function refreshDashboard(rootInteraction, cfg, guildId, client) {
             const autoRoleConfigured = Boolean(cfg.autoRole) || (Array.isArray(welcomeConfig.roleIds) && welcomeConfig.roleIds.length > 0);
             
             const conflicts = [
-                verificationEnabled ? 'Verification system is enabled' : null,
-                autoRoleConfigured ? 'AutoRole is configured' : null
+                verificationEnabled ? t(lang, 'wolf.cmd.autoverify.dashboard.blockingMsgVerif') : null,
+                autoRoleConfigured ? t(lang, 'wolf.cmd.autoverify.dashboard.blockingMsgAutoRole') : null
             ].filter(Boolean);
             
             if (conflicts.length > 0) {
@@ -129,9 +131,9 @@ async function refreshDashboard(rootInteraction, cfg, guildId, client) {
         }
         
         await InteractionHelper.safeEditReply(rootInteraction, {
-            embeds: [buildDashboardEmbed(cfg, rootInteraction.guild, conflictSummary)],
+            embeds: [buildDashboardEmbed(cfg, rootInteraction.guild, conflictSummary, lang)],
             components: [
-                buildButtonRow(cfg, guildId),
+                buildButtonRow(cfg, guildId, false, lang),
                 new ActionRowBuilder().addComponents(selectMenu),
             ],
             flags: MessageFlags.Ephemeral,
@@ -148,6 +150,7 @@ export default {
         try {
             const guildId = interaction.guild.id;
             const guildConfig = await getGuildConfig(client, guildId);
+            const lang = pickLanguage(guildConfig, interaction.guild);
 
             // Check if auto-verification is configured
             if (!guildConfig.verification?.autoVerify?.enabled) {
@@ -157,20 +160,20 @@ export default {
                 const autoRoleConfigured = Boolean(guildConfig.autoRole) || (Array.isArray(welcomeConfig.roleIds) && welcomeConfig.roleIds.length > 0);
                 
                 const blockingMessage = [];
-                if (verificationEnabled) blockingMessage.push('Verification system is enabled');
-                if (autoRoleConfigured) blockingMessage.push('AutoRole is configured');
+                if (verificationEnabled) blockingMessage.push(t(lang, 'wolf.cmd.autoverify.dashboard.blockingMsgVerif'));
+                if (autoRoleConfigured) blockingMessage.push(t(lang, 'wolf.cmd.autoverify.dashboard.blockingMsgAutoRole'));
 
                 const blockingText = blockingMessage.length > 0 
-                    ? `\n\n⚠️ **To enable AutoVerify, you must first disable:**\n${blockingMessage.map(msg => `• ${msg}`).join('\n')}`
+                    ? `${t(lang, 'wolf.cmd.autoverify.dashboard.blockingTextHeader')}\n${blockingMessage.map(msg => `• ${msg}`).join('\n')}`
                     : '';
 
                 return await InteractionHelper.safeReply(interaction, {
                     embeds: [
                         new EmbedBuilder()
-                            .setTitle('🤖 Auto-Verification Dashboard')
-                            .setDescription(`Auto-verification is not yet configured.${blockingText}\n\nUse \`/autoverify setup\` to configure it.`)
+                            .setTitle(t(lang, 'wolf.cmd.autoverify.dashboard.title'))
+                            .setDescription(t(lang, 'wolf.cmd.autoverify.dashboard.notConfiguredDesc', { blockingText }))
                             .setColor(getColor('warning'))
-                            .setFooter({ text: 'Dashboard closes after 10 minutes of inactivity' })
+                            .setFooter({ text: t(lang, 'wolf.cmd.verification.dashboard.footer') })
                             .setTimestamp()
                     ],
                     flags: MessageFlags.Ephemeral
@@ -179,7 +182,7 @@ export default {
 
             await InteractionHelper.safeDefer(interaction, { ephemeral: true });
 
-            const selectMenu = buildSelectMenu(guildId);
+            const selectMenu = buildSelectMenu(guildId, lang);
             
             // Get conflict summary
             let conflictSummary = '';
@@ -189,8 +192,8 @@ export default {
                 const autoRoleConfigured = Boolean(guildConfig.autoRole) || (Array.isArray(welcomeConfig.roleIds) && welcomeConfig.roleIds.length > 0);
                 
                 const conflicts = [
-                    verificationEnabled ? 'Verification system is enabled' : null,
-                    autoRoleConfigured ? 'AutoRole is configured' : null
+                    verificationEnabled ? t(lang, 'wolf.cmd.autoverify.dashboard.blockingMsgVerif') : null,
+                    autoRoleConfigured ? t(lang, 'wolf.cmd.autoverify.dashboard.blockingMsgAutoRole') : null
                 ].filter(Boolean);
                 
                 if (conflicts.length > 0) {
@@ -201,9 +204,9 @@ export default {
             }
 
             await InteractionHelper.safeEditReply(interaction, {
-                embeds: [buildDashboardEmbed(guildConfig, interaction.guild, conflictSummary)],
+                embeds: [buildDashboardEmbed(guildConfig, interaction.guild, conflictSummary, lang)],
                 components: [
-                    buildButtonRow(guildConfig, guildId),
+                    buildButtonRow(guildConfig, guildId, false, lang),
                     new ActionRowBuilder().addComponents(selectMenu),
                 ],
                 flags: MessageFlags.Ephemeral,
@@ -222,10 +225,10 @@ export default {
                 try {
                     switch (selectedOption) {
                         case 'role':
-                            await handleRole(selectInteraction, interaction, guildConfig, guildId, client);
+                            await handleRole(selectInteraction, interaction, guildConfig, guildId, client, lang);
                             break;
                         case 'account_age':
-                            await handleAccountAge(selectInteraction, interaction, guildConfig, guildId, client);
+                            await handleAccountAge(selectInteraction, interaction, guildConfig, guildId, client, lang);
                             break;
                     }
                 } catch (error) {
@@ -237,8 +240,8 @@ export default {
 
                     const errorMessage =
                         error instanceof TitanBotError
-                            ? error.userMessage || 'An error occurred while processing your selection.'
-                            : 'An unexpected error occurred while updating the configuration.';
+                            ? error.userMessage || t(lang, 'wolf.cmd.verification.dashboard.errProcessing')
+                            : t(lang, 'wolf.cmd.verification.dashboard.errUpdating');
 
                     if (!selectInteraction.replied && !selectInteraction.deferred) {
                         await selectInteraction.deferUpdate().catch(() => {});
@@ -246,7 +249,7 @@ export default {
 
                     await selectInteraction
                         .followUp({
-                            embeds: [errorEmbed('Configuration Error', errorMessage)],
+                            embeds: [errorEmbed(t(lang, 'wolf.cmd.verification.dashboard.errTitle'), errorMessage)],
                             flags: MessageFlags.Ephemeral,
                         })
                         .catch(() => {});
@@ -265,7 +268,7 @@ export default {
             btnCollector.on('collect', async btnInteraction => {
                 try {
                     if (btnInteraction.customId === `autoverify_cfg_criteria_${guildId}`) {
-                        await handleCriteria(btnInteraction, interaction, guildConfig, guildId, client);
+                        await handleCriteria(btnInteraction, interaction, guildConfig, guildId, client, lang);
                     } else if (btnInteraction.customId === `autoverify_cfg_toggle_${guildId}`) {
                         await btnInteraction.deferUpdate().catch(() => null);
                         guildConfig.verification.autoVerify.enabled = !guildConfig.verification.autoVerify.enabled;
@@ -274,8 +277,12 @@ export default {
                         await btnInteraction.followUp({
                             embeds: [
                                 successEmbed(
-                                    '✅ Status Updated',
-                                    `Auto-verification is now **${guildConfig.verification.autoVerify.enabled ? 'enabled' : 'disabled'}**.`,
+                                    t(lang, 'wolf.cmd.autoverify.dashboard.statusUpdatedTitle'),
+                                    t(lang, 'wolf.cmd.autoverify.dashboard.statusUpdatedDesc', {
+                                        status: guildConfig.verification.autoVerify.enabled
+                                            ? t(lang, 'wolf.cmd.verification.dashboard.enabled')
+                                            : t(lang, 'wolf.cmd.verification.dashboard.disabled')
+                                    }),
                                 ),
                             ],
                             flags: MessageFlags.Ephemeral,
@@ -293,8 +300,8 @@ export default {
                     btnCollector.stop();
                     try {
                         const timeoutEmbed = new EmbedBuilder()
-                            .setTitle('⏰ Dashboard Timed Out')
-                            .setDescription('This dashboard has been closed due to inactivity. Please run the command again to continue.')
+                            .setTitle(t(lang, 'wolf.cmd.verification.dashboard.timeoutTitle'))
+                            .setDescription(t(lang, 'wolf.cmd.verification.dashboard.timeoutDesc'))
                             .setColor(getColor('error'));
                         await InteractionHelper.safeEditReply(interaction, {
                             embeds: [timeoutEmbed],
@@ -320,28 +327,28 @@ export default {
 
 // ─── Handle Criteria ──────────────────────────────────────────────────────────
 
-async function handleCriteria(selectInteraction, rootInteraction, guildConfig, guildId, client) {
+async function handleCriteria(selectInteraction, rootInteraction, guildConfig, guildId, client, lang) {
     // Defer the interaction if it's a button, otherwise it was already deferred by select menu
     if (!selectInteraction.deferred) {
         await selectInteraction.deferUpdate().catch(() => null);
     }
     
     const criteriaEmbed = new EmbedBuilder()
-        .setTitle('🎯 Select Verification Criteria')
-        .setDescription('Choose the criteria for automatic verification')
+        .setTitle(t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaModalTitle'))
+        .setDescription(t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaModalDesc'))
         .setColor(getColor('info'));
 
     const criteriaMenu = new StringSelectMenuBuilder()
         .setCustomId('autoverify_criteria_select')
-        .setPlaceholder('Select criteria...')
+        .setPlaceholder(t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaPlaceholder'))
         .addOptions(
             new StringSelectMenuOptionBuilder()
-                .setLabel(`Account Age (older than ${defaultAccountAgeDays} days)`)
-                .setDescription('Users with older accounts will be auto-verified')
+                .setLabel(t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaOptAge', { days: defaultAccountAgeDays }))
+                .setDescription(t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaOptAgeDesc'))
                 .setValue('account_age'),
             new StringSelectMenuOptionBuilder()
-                .setLabel('No Criteria (verify everyone)')
-                .setDescription('All users gain the role immediately')
+                .setLabel(t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaOptNone'))
+                .setDescription(t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaOptNoneDesc'))
                 .setValue('none'),
         );
 
@@ -377,15 +384,20 @@ async function handleCriteria(selectInteraction, rootInteraction, guildConfig, g
         let criteriaDisplay = '';
         switch (newCriteria) {
             case 'account_age':
-                criteriaDisplay = `Account Age (${guildConfig.verification.autoVerify.accountAgeDays} days)`;
+                criteriaDisplay = t(lang, 'wolf.cmd.autoverify.admin.criteriaAgeDesc', { days: guildConfig.verification.autoVerify.accountAgeDays });
                 break;
             case 'none':
-                criteriaDisplay = 'No Criteria';
+                criteriaDisplay = t(lang, 'wolf.cmd.autoverify.admin.criteriaNoneDesc');
                 break;
         }
 
         await criteriaInteraction.followUp({
-            embeds: [successEmbed('✅ Criteria Updated', `Auto-verification criteria changed to **${criteriaDisplay}**.`)],
+            embeds: [
+                successEmbed(
+                    t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaSuccessTitle'),
+                    t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaSuccessDesc', { criteria: criteriaDisplay })
+                )
+            ],
             flags: MessageFlags.Ephemeral,
         });
 
@@ -396,7 +408,12 @@ async function handleCriteria(selectInteraction, rootInteraction, guildConfig, g
         if (reason === 'time' && collected.size === 0) {
             selectInteraction
                 .followUp({
-                    embeds: [errorEmbed('Timed Out', 'No criteria selected. The setting was not changed.')],
+                    embeds: [
+                        errorEmbed(
+                            t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaTimeoutTitle'),
+                            t(lang, 'wolf.cmd.autoverify.dashboard.actionCriteriaTimeoutDesc')
+                        )
+                    ],
                     flags: MessageFlags.Ephemeral,
                 })
                 .catch(() => {});
@@ -406,19 +423,19 @@ async function handleCriteria(selectInteraction, rootInteraction, guildConfig, g
 
 // ─── Handle Role ──────────────────────────────────────────────────────────────
 
-async function handleRole(selectInteraction, rootInteraction, guildConfig, guildId, client) {
+async function handleRole(selectInteraction, rootInteraction, guildConfig, guildId, client, lang) {
     await selectInteraction.deferUpdate();
 
     const roleSelect = new RoleSelectMenuBuilder()
         .setCustomId('autoverify_role_select')
-        .setPlaceholder('Select a role...')
+        .setPlaceholder(t(lang, 'wolf.cmd.verification.dashboard.actionRolePlaceholder'))
         .setMaxValues(1);
 
     await selectInteraction.followUp({
         embeds: [
             new EmbedBuilder()
-                .setTitle('🏷️ Auto-Verification Role')
-                .setDescription('Select the role to assign to auto-verified users.')
+                .setTitle(`🏷️ ${t(lang, 'wolf.cmd.autoverify.dashboard.optRoleLabel')}`)
+                .setDescription(t(lang, 'wolf.cmd.autoverify.dashboard.optRoleDesc'))
                 .setColor(getColor('info')),
         ],
         components: [new ActionRowBuilder().addComponents(roleSelect)],
@@ -441,8 +458,8 @@ async function handleRole(selectInteraction, rootInteraction, guildConfig, guild
             await roleInteraction.followUp({
                 embeds: [
                     errorEmbed(
-                        'Invalid Role',
-                        'Please choose a normal assignable role (not @everyone or a bot-managed role).',
+                        t(lang, 'wolf.cmd.verification.dashboard.errTitle'),
+                        t(lang, 'wolf.cmd.verification.admin.invalidRoleError'),
                     ),
                 ],
                 flags: MessageFlags.Ephemeral,
@@ -455,8 +472,8 @@ async function handleRole(selectInteraction, rootInteraction, guildConfig, guild
             await roleInteraction.followUp({
                 embeds: [
                     errorEmbed(
-                        'Role Too High',
-                        'The selected role must be below my highest role in the server role hierarchy.',
+                        t(lang, 'wolf.cmd.verification.dashboard.errTitle'),
+                        t(lang, 'wolf.cmd.autoverify.admin.roleHierarchyError'),
                     ),
                 ],
                 flags: MessageFlags.Ephemeral,
@@ -468,7 +485,12 @@ async function handleRole(selectInteraction, rootInteraction, guildConfig, guild
         await setGuildConfig(client, guildId, guildConfig);
 
         await roleInteraction.followUp({
-            embeds: [successEmbed('✅ Role Updated', `Auto-verification role set to ${role}.`)],
+            embeds: [
+                successEmbed(
+                    t(lang, 'wolf.cmd.verification.dashboard.actionRoleSuccessTitle'),
+                    t(lang, 'wolf.cmd.verification.dashboard.actionRoleSuccessDesc', { role: role.toString() })
+                )
+            ],
             flags: MessageFlags.Ephemeral,
         });
 
@@ -479,7 +501,12 @@ async function handleRole(selectInteraction, rootInteraction, guildConfig, guild
         if (reason === 'time' && collected.size === 0) {
             selectInteraction
                 .followUp({
-                    embeds: [errorEmbed('Timed Out', 'No role was selected. The setting was not changed.')],
+                    embeds: [
+                        errorEmbed(
+                            t(lang, 'wolf.cmd.verification.dashboard.actionRoleTimeoutTitle'),
+                            t(lang, 'wolf.cmd.verification.dashboard.actionRoleTimeoutDesc')
+                        )
+                    ],
                     flags: MessageFlags.Ephemeral,
                 })
                 .catch(() => {});
@@ -489,17 +516,17 @@ async function handleRole(selectInteraction, rootInteraction, guildConfig, guild
 
 // ─── Handle Account Age ────────────────────────────────────────────────────────
 
-async function handleAccountAge(selectInteraction, rootInteraction, guildConfig, guildId, client) {
+async function handleAccountAge(selectInteraction, rootInteraction, guildConfig, guildId, client, lang) {
     const modal = new ModalBuilder()
         .setCustomId('autoverify_account_age_modal')
-        .setTitle('Set Account Age Requirement')
+        .setTitle(t(lang, 'wolf.cmd.autoverify.dashboard.actionAgeModalTitle'))
         .addComponents(
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
                     .setCustomId('age_input')
-                    .setLabel('Minimum Account Age (days)')
+                    .setLabel(t(lang, 'wolf.cmd.autoverify.dashboard.actionAgeInputLabel'))
                     .setStyle(TextInputStyle.Short)
-                    .setPlaceholder(`Between ${minAccountAgeDays} and ${maxAccountAgeDays}`)
+                    .setPlaceholder(t(lang, 'wolf.cmd.autoverify.dashboard.actionAgeInputPlaceholder', { min: minAccountAgeDays, max: maxAccountAgeDays }))
                     .setValue((guildConfig.verification.autoVerify.accountAgeDays || defaultAccountAgeDays).toString())
                     .setRequired(true),
             ),
@@ -522,7 +549,12 @@ async function handleAccountAge(selectInteraction, rootInteraction, guildConfig,
 
     if (isNaN(days) || days < minAccountAgeDays || days > maxAccountAgeDays) {
         await submitted.reply({
-            embeds: [errorEmbed('Invalid Input', `Please enter a number between ${minAccountAgeDays} and ${maxAccountAgeDays}.`)],
+            embeds: [
+                errorEmbed(
+                    t(lang, 'wolf.cmd.autoverify.dashboard.actionAgeErrTitle'),
+                    t(lang, 'wolf.cmd.autoverify.dashboard.actionAgeErrDesc', { min: minAccountAgeDays, max: maxAccountAgeDays })
+                )
+            ],
             flags: MessageFlags.Ephemeral,
         });
         return;
@@ -532,13 +564,14 @@ async function handleAccountAge(selectInteraction, rootInteraction, guildConfig,
     await setGuildConfig(client, guildId, guildConfig);
 
     await submitted.reply({
-        embeds: [successEmbed('✅ Account Age Updated', `Minimum account age requirement set to **${days} days**.`)],
+        embeds: [
+            successEmbed(
+                t(lang, 'wolf.cmd.autoverify.dashboard.actionAgeSuccessTitle'),
+                t(lang, 'wolf.cmd.autoverify.dashboard.actionAgeSuccessDesc', { days })
+            )
+        ],
         flags: MessageFlags.Ephemeral,
     });
 
     await refreshDashboard(rootInteraction, guildConfig, guildId, client);
 }
-
-// ─── Handle Member Duration ────────────────────────────────────────────────────
-
-

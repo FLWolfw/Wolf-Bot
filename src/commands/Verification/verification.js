@@ -9,6 +9,7 @@ import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { getWelcomeConfig } from '../../utils/database.js';
 import verificationDashboard from './modules/verification_dashboard.js';
+import { t, pickLanguage } from '../../services/i18n.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -64,6 +65,7 @@ export default {
         ),
 
     async execute(interaction, config, client) {
+        const lang = pickLanguage(config, interaction.guild);
         const wrappedExecute = withErrorHandling(async () => {
             const subcommand = interaction.options.getSubcommand();
             const guild = interaction.guild;
@@ -72,23 +74,23 @@ export default {
                 throw createError(
                     'Missing ManageGuild permission for verification admin subcommand',
                     ErrorTypes.PERMISSION,
-                    'You need the **Manage Server** permission to use this verification subcommand.',
+                    t(lang, 'wolf.cmd.verification.admin.missingPermsDesc'),
                     { subcommand, requiredPermission: 'ManageGuild', userId: interaction.user.id }
                 );
             }
 
             switch (subcommand) {
                 case "setup":
-                    return await handleSetup(interaction, guild, client);
+                    return await handleSetup(interaction, guild, client, lang);
                 case "remove":
-                    return await handleRemove(interaction, guild, client);
+                    return await handleRemove(interaction, guild, client, lang);
                 case "dashboard":
                     return await verificationDashboard.execute(interaction, config, client);
                 default:
                     throw createError(
                         `Unknown subcommand: ${subcommand}`,
                         ErrorTypes.VALIDATION,
-                        "Please select a valid subcommand.",
+                        t(lang, 'wolf.cmd.verification.admin.invalidSubcommand'),
                         { subcommand }
                     );
             }
@@ -98,7 +100,7 @@ export default {
     }
 };
 
-async function handleSetup(interaction, guild, client) {
+async function handleSetup(interaction, guild, client, lang) {
     const verificationChannel = interaction.options.getChannel("verification_channel");
     const verifiedRole = interaction.options.getRole("verified_role");
     const message = interaction.options.getString("message") || botConfig.verification.defaultMessage;
@@ -109,7 +111,7 @@ async function handleSetup(interaction, guild, client) {
         throw createError(
             'Bot member not found in guild cache',
             ErrorTypes.CONFIGURATION,
-            'I could not verify my permissions in this server. Please try again in a moment.',
+            t(lang, 'wolf.cmd.verification.admin.botPermsError'),
             { guildId: guild.id }
         );
     }
@@ -127,7 +129,7 @@ async function handleSetup(interaction, guild, client) {
         throw createError(
             `Missing channel permissions: ${missingChannelPerms.join(', ')}`,
             ErrorTypes.PERMISSION,
-            'I need **View Channel**, **Send Messages**, and **Embed Links** in the verification channel.',
+            t(lang, 'wolf.cmd.verification.admin.channelPermsError'),
             { missingPermissions: missingChannelPerms, channel: verificationChannel.id }
         );
     }
@@ -136,7 +138,7 @@ async function handleSetup(interaction, guild, client) {
         throw createError(
             "Missing ManageRoles permission",
             ErrorTypes.PERMISSION,
-            "I need the 'Manage Roles' permission to give verified roles.",
+            t(lang, 'wolf.cmd.verification.admin.manageRolesError'),
             { missingPermission: "ManageRoles" }
         );
     }
@@ -145,7 +147,7 @@ async function handleSetup(interaction, guild, client) {
         throw createError(
             'Invalid verified role selected',
             ErrorTypes.VALIDATION,
-            'Please choose a normal assignable role (not @everyone or an integration-managed role).',
+            t(lang, 'wolf.cmd.verification.admin.invalidRoleError'),
             { roleId: verifiedRole.id, managed: verifiedRole.managed }
         );
     }
@@ -155,7 +157,7 @@ async function handleSetup(interaction, guild, client) {
         throw createError(
             "Role hierarchy error",
             ErrorTypes.PERMISSION,
-            "The verified role must be below my highest role in the server role hierarchy.",
+            t(lang, 'wolf.cmd.verification.admin.roleHierarchyError'),
             { rolePosition: verifiedRole.position, botRolePosition: botRole.position }
         );
     }
@@ -169,7 +171,7 @@ async function handleSetup(interaction, guild, client) {
         throw createError(
             'Verification setup blocked by conflicting onboarding system',
             ErrorTypes.CONFIGURATION,
-            'You cannot enable the verification system while **AutoVerify** or **AutoRole** is configured. Disable those first.',
+            t(lang, 'wolf.cmd.verification.admin.conflictingSystemsError'),
             {
                 guildId: guild.id,
                 hasAutoVerifyEnabled,
@@ -183,7 +185,7 @@ async function handleSetup(interaction, guild, client) {
     await InteractionHelper.safeDefer(interaction);
 
     const verifyEmbed = createEmbed({
-        title: "✅ Server Verification",
+        title: t(lang, 'wolf.cmd.verification.admin.livePanelTitle'),
         description: message,
         color: getColor('success')
     });
@@ -214,17 +216,17 @@ async function handleSetup(interaction, guild, client) {
 
     await InteractionHelper.safeEditReply(interaction, {
         embeds: [ContextualMessages.configUpdated(
-            "Verification System",
+            t(lang, 'wolf.cmd.verification.admin.systemLabel'),
             [
-                `Channel: ${verificationChannel}`,
-                `Verified Role: ${verifiedRole}`,
-                `Button Text: ${buttonText}`
+                `${t(lang, 'wolf.cmd.verification.admin.channelLabel')}: ${verificationChannel}`,
+                `${t(lang, 'wolf.cmd.verification.admin.roleLabel')}: ${verifiedRole}`,
+                `${t(lang, 'wolf.cmd.verification.admin.buttonLabel')}: ${buttonText}`
             ]
         )]
     });
 }
 
-async function handleRemove(interaction, guild, client) {
+async function handleRemove(interaction, guild, client, lang) {
     const targetUser = interaction.options.getUser("user");
     
     try {
@@ -236,7 +238,10 @@ async function handleRemove(interaction, guild, client) {
         if (!result.success) {
             if (result.notVerified) {
                 return await InteractionHelper.safeReply(interaction, {
-                    embeds: [infoEmbed("Not Verified", `${targetUser.tag} does not currently have the verified role.`)],
+                    embeds: [infoEmbed(
+                        t(lang, 'wolf.cmd.verification.admin.notVerifiedTitle'),
+                        t(lang, 'wolf.cmd.verification.admin.notVerifiedDesc', { user: targetUser.tag })
+                    )],
                     flags: MessageFlags.Ephemeral
                 });
             }
@@ -249,7 +254,10 @@ async function handleRemove(interaction, guild, client) {
         });
 
         return await InteractionHelper.safeReply(interaction, {
-            embeds: [successEmbed("Verification Removed", `Verification removed from ${targetUser.tag}.`)]
+            embeds: [successEmbed(
+                t(lang, 'wolf.cmd.verification.admin.removeSuccessTitle'),
+                t(lang, 'wolf.cmd.verification.admin.removeSuccessDesc', { user: targetUser.tag })
+            )]
         });
 
     } catch (error) {
