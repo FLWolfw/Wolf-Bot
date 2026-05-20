@@ -154,6 +154,20 @@ export default {
         errorTitle: 'Error del sistema',
         errorDesc: 'No se pudo calcular el tiempo activo.',
       },
+      leveling: {
+        disabled: 'El sistema de niveles está desactivado en este servidor.',
+        userNotFound: 'No se pudo encontrar al usuario en este servidor.',
+        rankTitle: 'Rango de {user}',
+        level: '📊 Nivel',
+        xp: '⭐ XP',
+        totalXp: '✨ XP total',
+        progressTo: 'Progreso al nivel {level}',
+        lbTitle: '🏆 Tabla de Niveles',
+        lbDescription: 'Los 10 miembros más activos de este servidor:',
+        lbEmpty: 'Aún no hay datos. ¡Empieza a chatear para ganar XP!',
+        lbRankings: 'Clasificación',
+        lbEntry: '{rank} {user} — Nivel {level} ({xp}/{next} XP)',
+      },
       mod: {
         common: {
           noReason: 'Sin razón especificada',

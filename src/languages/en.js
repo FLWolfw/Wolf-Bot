@@ -154,6 +154,20 @@ export default {
         errorTitle: 'System Error',
         errorDesc: 'Could not compute uptime.',
       },
+      leveling: {
+        disabled: 'The leveling system is currently disabled on this server.',
+        userNotFound: 'Could not find the specified user in this server.',
+        rankTitle: "{user}'s Rank",
+        level: '📊 Level',
+        xp: '⭐ XP',
+        totalXp: '✨ Total XP',
+        progressTo: 'Progress to Level {level}',
+        lbTitle: '🏆 Level Leaderboard',
+        lbDescription: 'Top 10 most active members in this server:',
+        lbEmpty: 'No level data found yet. Start chatting to gain XP!',
+        lbRankings: 'Rankings',
+        lbEntry: '{rank} {user} — Level {level} ({xp}/{next} XP)',
+      },
       mod: {
         common: {
           noReason: 'No reason provided',

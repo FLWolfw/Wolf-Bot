@@ -7,6 +7,7 @@ import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 import { handleInteractionError, TitanBotError, ErrorTypes } from '../../utils/errorHandler.js';
 import { getUserLevelData, getLevelingConfig, getXpForLevel } from '../../services/leveling.js';
+import { t, pickLanguage } from '../../services/i18n.js';
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 export default {
@@ -29,37 +30,31 @@ export default {
 
 
   async execute(interaction, config, client) {
+    const lang = pickLanguage(config, interaction.guild);
     try {
       await InteractionHelper.safeDefer(interaction);
 
       const levelingConfig = await getLevelingConfig(client, interaction.guildId);
       if (!levelingConfig?.enabled) {
         await InteractionHelper.safeEditReply(interaction, {
-          embeds: [
-            new EmbedBuilder()
-              .setColor('#f1c40f')
-              .setDescription('The leveling system is currently disabled on this server.')
-          ],
+          embeds: [new EmbedBuilder().setColor('#f1c40f').setDescription(t(lang, 'wolf.cmd.leveling.disabled'))],
           flags: MessageFlags.Ephemeral
         });
         return;
       }
 
       const targetUser = interaction.options.getUser('user') || interaction.user;
-      const member = await interaction.guild.members
-        .fetch(targetUser.id)
-        .catch(() => null);
+      const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
 
       if (!member) {
         throw new TitanBotError(
           `User ${targetUser.id} not found in guild`,
           ErrorTypes.USER_INPUT,
-          'Could not find the specified user in this server.'
+          t(lang, 'wolf.cmd.leveling.userNotFound'),
         );
       }
 
       const userData = await getUserLevelData(client, interaction.guildId, targetUser.id);
-
       const safeUserData = {
         level: userData?.level ?? 0,
         xp: userData?.xp ?? 0,
@@ -71,28 +66,13 @@ export default {
       const progressBar = createProgressBar(progress, 20);
 
       const embed = new EmbedBuilder()
-        .setTitle(`${member.displayName}'s Rank`)
+        .setTitle(t(lang, 'wolf.cmd.leveling.rankTitle', { user: member.displayName }))
         .setThumbnail(member.displayAvatarURL({ dynamic: true }))
         .addFields(
-          {
-            name: '📊 Level',
-            value: safeUserData.level.toString(),
-            inline: true
-          },
-          {
-            name: '⭐ XP',
-            value: `${safeUserData.xp}/${xpNeeded}`,
-            inline: true
-          },
-          {
-            name: '✨ Total XP',
-            value: safeUserData.totalXp.toString(),
-            inline: true
-          },
-          {
-            name: `Progress to Level ${safeUserData.level + 1}`,
-            value: `${progressBar} ${progress}%`
-          }
+          { name: t(lang, 'wolf.cmd.leveling.level'), value: safeUserData.level.toString(), inline: true },
+          { name: t(lang, 'wolf.cmd.leveling.xp'), value: `${safeUserData.xp}/${xpNeeded}`, inline: true },
+          { name: t(lang, 'wolf.cmd.leveling.totalXp'), value: safeUserData.totalXp.toString(), inline: true },
+          { name: t(lang, 'wolf.cmd.leveling.progressTo', { level: safeUserData.level + 1 }), value: `${progressBar} ${progress}%` },
         )
         .setColor('#2ecc71')
         .setTimestamp();

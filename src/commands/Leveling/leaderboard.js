@@ -7,6 +7,7 @@ import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 import { handleInteractionError, TitanBotError, ErrorTypes } from '../../utils/errorHandler.js';
 import { getLeaderboard, getLevelingConfig, getXpForLevel } from '../../services/leveling.js';
+import { t, pickLanguage } from '../../services/i18n.js';
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 export default {
@@ -23,18 +24,14 @@ export default {
 
 
   async execute(interaction, config, client) {
+    const lang = pickLanguage(config, interaction.guild);
     try {
       await InteractionHelper.safeDefer(interaction);
 
       const levelingConfig = await getLevelingConfig(client, interaction.guildId);
-
       if (!levelingConfig?.enabled) {
         await InteractionHelper.safeEditReply(interaction, {
-          embeds: [
-            new EmbedBuilder()
-              .setColor('#f1c40f')
-              .setDescription('The leveling system is currently disabled on this server.')
-          ],
+          embeds: [new EmbedBuilder().setColor('#f1c40f').setDescription(t(lang, 'wolf.cmd.leveling.disabled'))],
           flags: MessageFlags.Ephemeral
         });
         return;
@@ -43,17 +40,13 @@ export default {
       const leaderboard = await getLeaderboard(client, interaction.guildId, 10);
 
       if (leaderboard.length === 0) {
-        throw new TitanBotError(
-          'No leaderboard data found',
-          ErrorTypes.DATABASE,
-          'No level data found yet. Start chatting to gain XP!'
-        );
+        throw new TitanBotError('No leaderboard data found', ErrorTypes.DATABASE, t(lang, 'wolf.cmd.leveling.lbEmpty'));
       }
 
       const embed = new EmbedBuilder()
-        .setTitle('🏆 Level Leaderboard')
+        .setTitle(t(lang, 'wolf.cmd.leveling.lbTitle'))
         .setColor('#2ecc71')
-        .setDescription("Top 10 most active members in this server:")
+        .setDescription(t(lang, 'wolf.cmd.leveling.lbDescription'))
         .setTimestamp();
 
       const leaderboardText = await Promise.all(
@@ -69,17 +62,14 @@ export default {
             else if (index === 2) rankPrefix = '🥉';
             else rankPrefix = `**${index + 1}.**`;
 
-            return `${rankPrefix} ${userMention} - Level ${user.level} (${user.xp}/${xpForNextLevel} XP)`;
+            return t(lang, 'wolf.cmd.leveling.lbEntry', { rank: rankPrefix, user: userMention, level: user.level, xp: user.xp, next: xpForNextLevel });
           } catch {
             return `**${index + 1}.** Error loading user ${user.userId}`;
           }
         })
       );
 
-      embed.addFields({
-        name: 'Rankings',
-        value: leaderboardText.join('\n')
-      });
+      embed.addFields({ name: t(lang, 'wolf.cmd.leveling.lbRankings'), value: leaderboardText.join('\n') });
 
       await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
       logger.debug(`Leaderboard displayed for guild ${interaction.guildId}`);
