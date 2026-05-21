@@ -5,15 +5,16 @@ import { logger } from '../../utils/logger.js';
 import { handleInteractionError, withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
 import ApplicationService from '../../services/applicationService.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-import { 
-    getApplicationSettings, 
-    getUserApplications, 
-    createApplication, 
+import {
+    getApplicationSettings,
+    getUserApplications,
+    createApplication,
     getApplication,
     getApplicationRoles,
     updateApplication,
     getApplicationRoleSettings
 } from '../../utils/database.js';
+import { t, pickLanguage } from '../../services/i18n.js';
 
 function getApplicationStatusPresentation(statusValue) {
     const normalized = typeof statusValue === 'string' ? statusValue.trim().toLowerCase() : 'unknown';
@@ -66,10 +67,11 @@ export default {
 
     category: "Community",
 
-    execute: withErrorHandling(async (interaction) => {
+    execute: withErrorHandling(async (interaction, config) => {
+        const lang = pickLanguage(config, interaction.guild);
         if (!interaction.inGuild()) {
             return InteractionHelper.safeReply(interaction, {
-                embeds: [errorEmbed("This command can only be used in a server.")],
+                embeds: [errorEmbed(t(lang, 'wolf.cmd.community.notInServer'))],
                 flags: ["Ephemeral"],
             });
         }
@@ -97,17 +99,17 @@ export default {
             throw createError(
                 'Applications are disabled',
                 ErrorTypes.CONFIGURATION,
-                'Applications are currently disabled in this server.',
+                t(lang, 'wolf.cmd.community.appsDisabled'),
                 { guildId: guild.id }
             );
         }
 
         if (subcommand === "submit") {
-            await handleSubmit(interaction, settings);
+            await handleSubmit(interaction, settings, lang);
         } else if (subcommand === "status") {
-            await handleStatus(interaction);
+            await handleStatus(interaction, lang);
         } else if (subcommand === "list") {
-            await handleList(interaction);
+            await handleList(interaction, lang);
         }
     }, { type: 'command', commandName: 'apply' })
 };
@@ -220,19 +222,19 @@ export async function handleApplicationModal(interaction) {
     }
 }
 
-async function handleList(interaction) {
+async function handleList(interaction, lang = 'es') {
     try {
         const applicationRoles = await getApplicationRoles(interaction.client, interaction.guild.id);
-        
+
         if (applicationRoles.length === 0) {
             return InteractionHelper.safeEditReply(interaction, {
-                embeds: [errorEmbed("No applications are currently available.")],
+                embeds: [errorEmbed(t(lang, 'wolf.cmd.community.listEmpty'))],
             });
         }
 
         const embed = createEmbed({
-            title: "Available Applications",
-            description: "Here are the roles you can apply for:"
+            title: t(lang, 'wolf.cmd.community.listTitle'),
+            description: ''
         });
 
         applicationRoles.forEach((appRole, index) => {
@@ -266,7 +268,7 @@ async function handleList(interaction) {
     }
 }
 
-async function handleSubmit(interaction, settings) {
+async function handleSubmit(interaction, settings, lang = 'es') {
     const applicationName = interaction.options.getString("application");
     const member = interaction.member;
 
@@ -280,8 +282,8 @@ async function handleSubmit(interaction, settings) {
         return InteractionHelper.safeEditReply(interaction, {
             embeds: [
                 errorEmbed(
-                    "Application not found.",
-                    "Use `/apply list` to see available applications."
+                    t(lang, 'wolf.cmd.community.appNotFoundTitle'),
+                    t(lang, 'wolf.cmd.community.appNotFoundDesc')
                 ),
             ],
             flags: ["Ephemeral"],
@@ -299,7 +301,8 @@ async function handleSubmit(interaction, settings) {
         return InteractionHelper.safeEditReply(interaction, {
             embeds: [
                 errorEmbed(
-                    `You already have a pending application. Please wait for it to be reviewed.`,
+                    t(lang, 'wolf.cmd.community.alreadyAppliedTitle'),
+                    t(lang, 'wolf.cmd.community.alreadyAppliedDesc'),
                 ),
             ],
             flags: ["Ephemeral"],
@@ -344,7 +347,7 @@ async function handleSubmit(interaction, settings) {
     await interaction.showModal(modal);
 }
 
-async function handleStatus(interaction) {
+async function handleStatus(interaction, lang = 'es') {
     const appId = interaction.options.getString("id");
 
     if (appId) {
@@ -389,7 +392,7 @@ async function handleStatus(interaction) {
         if (applications.length === 0) {
             return InteractionHelper.safeEditReply(interaction, {
                 embeds: [
-                    errorEmbed("You have not submitted any applications yet."),
+                    errorEmbed(t(lang, 'wolf.cmd.community.statusNone')),
                 ],
                 flags: ["Ephemeral"],
             });
