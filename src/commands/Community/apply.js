@@ -35,15 +35,39 @@ function getApplicationStatusPresentation(statusValue) {
 export default {
     data: new SlashCommandBuilder()
         .setName("apply")
+        .setNameLocalizations({
+            'es-ES': 'postularse',
+            'es-419': 'postularse'
+        })
         .setDescription("Manage role applications")
+        .setDescriptionLocalizations({
+            'es-ES': 'Gestiona tus postulaciones de roles',
+            'es-419': 'Gestiona tus postulaciones de roles'
+        })
         .addSubcommand((subcommand) =>
             subcommand
                 .setName("submit")
+                .setNameLocalizations({
+                    'es-ES': 'enviar',
+                    'es-419': 'enviar'
+                })
                 .setDescription("Submit an application for a role")
+                .setDescriptionLocalizations({
+                    'es-ES': 'Envía una postulación para un rol',
+                    'es-419': 'Envía una postulación para un rol'
+                })
                 .addStringOption((option) =>
                     option
                         .setName("application")
+                        .setNameLocalizations({
+                            'es-ES': 'postulacion',
+                            'es-419': 'postulacion'
+                        })
                         .setDescription("The application you want to submit")
+                        .setDescriptionLocalizations({
+                            'es-ES': 'La postulación que deseas enviar',
+                            'es-419': 'La postulación que deseas enviar'
+                        })
                         .setRequired(true)
                         .setAutocomplete(true),
                 ),
@@ -51,18 +75,42 @@ export default {
         .addSubcommand((subcommand) =>
             subcommand
                 .setName("status")
+                .setNameLocalizations({
+                    'es-ES': 'estado',
+                    'es-419': 'estado'
+                })
                 .setDescription("Check the status of your application")
+                .setDescriptionLocalizations({
+                    'es-ES': 'Verifica el estado de tu postulación',
+                    'es-419': 'Verifica el estado de tu postulación'
+                })
                 .addStringOption((option) =>
                     option
                         .setName("id")
+                        .setNameLocalizations({
+                            'es-ES': 'id',
+                            'es-419': 'id'
+                        })
                         .setDescription("Application ID (leave empty to see all)")
+                        .setDescriptionLocalizations({
+                            'es-ES': 'ID de la postulación (deja vacío para ver todas)',
+                            'es-419': 'ID de la postulación (deja vacío para ver todas)'
+                        })
                         .setRequired(false),
                 ),
         )
         .addSubcommand((subcommand) =>
             subcommand
                 .setName("list")
-                .setDescription("List available applications to apply for"),
+                .setNameLocalizations({
+                    'es-ES': 'listar',
+                    'es-419': 'listar'
+                })
+                .setDescription("List available applications to apply for")
+                .setDescriptionLocalizations({
+                    'es-ES': 'Muestra las postulaciones disponibles',
+                    'es-419': 'Muestra las postulaciones disponibles'
+                }),
         ),
 
     category: "Community",

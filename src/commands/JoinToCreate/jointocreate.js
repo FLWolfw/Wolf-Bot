@@ -18,23 +18,55 @@ import {
 export default {
     data: new SlashCommandBuilder()
         .setName("jointocreate")
+        .setNameLocalizations({
+            'es-ES': 'unirsecrear',
+            'es-419': 'unirsecrear'
+        })
         .setDescription("Manage Join to Create voice channels system.")
+        .setDescriptionLocalizations({
+            'es-ES': 'Gestiona el sistema de canales de voz "Unirse para Crear"',
+            'es-419': 'Gestiona el sistema de canales de voz "Unirse para Crear"'
+        })
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
         .setDMPermission(false)
         .addSubcommand((subcommand) =>
             subcommand
                 .setName("setup")
+                .setNameLocalizations({
+                    'es-ES': 'configurar',
+                    'es-419': 'configurar'
+                })
                 .setDescription("Set up a new Join to Create voice channel.")
+                .setDescriptionLocalizations({
+                    'es-ES': 'Configura un nuevo canal de voz "Unirse para Crear"',
+                    'es-419': 'Configura un nuevo canal de voz "Unirse para Crear"'
+                })
                 .addChannelOption((option) =>
                     option
                         .setName("category")
+                        .setNameLocalizations({
+                            'es-ES': 'categoria',
+                            'es-419': 'categoria'
+                        })
                         .setDescription("Category to create the channel in.")
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Categoría en la que se creará el canal',
+                            'es-419': 'Categoría en la que se creará el canal'
+                        })
                         .addChannelTypes(ChannelType.GuildCategory)
                 )
                 .addStringOption((option) =>
                     option
                         .setName("channel_name")
+                        .setNameLocalizations({
+                            'es-ES': 'nombre_canal',
+                            'es-419': 'nombre_canal'
+                        })
                         .setDescription("Select a template for naming temporary voice channels.")
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Selecciona una plantilla para nombrar canales de voz temporales',
+                            'es-419': 'Selecciona una plantilla para nombrar canales de voz temporales'
+                        })
                         .addChoices(
                             { name: "{username}'s Room (Default)", value: "{username}'s Room" },
                             { name: "{username}'s Channel", value: "{username}'s Channel" },
@@ -51,22 +83,54 @@ export default {
                 .addIntegerOption((option) =>
                     option
                         .setName("user_limit")
+                        .setNameLocalizations({
+                            'es-ES': 'limite_usuarios',
+                            'es-419': 'limite_usuarios'
+                        })
                         .setDescription("Maximum number of users in temporary channels. (0 = unlimited)")
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Número máximo de usuarios en canales temporales (0 = ilimitado)',
+                            'es-419': 'Número máximo de usuarios en canales temporales (0 = ilimitado)'
+                        })
                 )
                 .addIntegerOption((option) =>
                     option
                         .setName("bitrate")
+                        .setNameLocalizations({
+                            'es-ES': 'bitrate',
+                            'es-419': 'bitrate'
+                        })
                         .setDescription("Bitrate for temporary channels in kbps (8-96).")
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Tasa de bits (bitrate) para canales temporales en kbps (8-96)',
+                            'es-419': 'Tasa de bits (bitrate) para canales temporales en kbps (8-96)'
+                        })
                 )
         )
         .addSubcommand((subcommand) =>
             subcommand
                 .setName("dashboard")
+                .setNameLocalizations({
+                    'es-ES': 'panel',
+                    'es-419': 'panel'
+                })
                 .setDescription("Configure an existing Join to Create system.")
+                .setDescriptionLocalizations({
+                    'es-ES': 'Configura un sistema "Unirse para Crear" existente',
+                    'es-419': 'Configura un sistema "Unirse para Crear" existente'
+                })
                 .addChannelOption((option) =>
                     option
                         .setName("trigger_channel")
+                        .setNameLocalizations({
+                            'es-ES': 'canal_origen',
+                            'es-419': 'canal_origen'
+                        })
                         .setDescription("The Join to Create trigger channel to configure.")
+                        .setDescriptionLocalizations({
+                            'es-ES': 'El canal de voz origen que se configurará',
+                            'es-419': 'El canal de voz origen que se configurará'
+                        })
                         .setRequired(true)
                         .addChannelTypes(ChannelType.GuildVoice)
                 )

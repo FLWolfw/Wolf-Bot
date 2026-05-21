@@ -11,61 +11,157 @@ import { t, pickLanguage } from '../../services/i18n.js';
 export default {
     data: new SlashCommandBuilder()
         .setName('reactroles')
+        .setNameLocalizations({
+            'es-ES': 'rolesreaccion',
+            'es-419': 'rolesreaccion'
+        })
         .setDescription('Manage reaction role assignments')
+        .setDescriptionLocalizations({
+            'es-ES': 'Administra la asignación de roles de reacción',
+            'es-419': 'Administra la asignación de roles de reacción'
+        })
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('setup')
+                .setNameLocalizations({
+                    'es-ES': 'configurar',
+                    'es-419': 'configurar'
+                })
                 .setDescription('Set up a new reaction role panel')
+                .setDescriptionLocalizations({
+                    'es-ES': 'Crea un nuevo panel de roles de reacción',
+                    'es-419': 'Crea un nuevo panel de roles de reacción'
+                })
                 .addChannelOption(option => 
                     option.setName('channel')
+                        .setNameLocalizations({
+                            'es-ES': 'canal',
+                            'es-419': 'canal'
+                        })
                         .setDescription('The channel to send the reaction role message to')
+                        .setDescriptionLocalizations({
+                            'es-ES': 'El canal donde enviar el mensaje de roles de reacción',
+                            'es-419': 'El canal donde enviar el mensaje de roles de reacción'
+                        })
                         .setRequired(true)
                 )
                 .addStringOption(option =>
                     option.setName('title')
+                        .setNameLocalizations({
+                            'es-ES': 'título',
+                            'es-419': 'titulo'
+                        })
                         .setDescription('Title for the reaction role panel')
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Título para el panel de roles de reacción',
+                            'es-419': 'Título para el panel de roles de reacción'
+                        })
                         .setRequired(true)
                 )
                 .addStringOption(option =>
                     option.setName('description')
+                        .setNameLocalizations({
+                            'es-ES': 'descripción',
+                            'es-419': 'descripcion'
+                        })
                         .setDescription('Description for the reaction role panel')
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Descripción para el panel de roles de reacción',
+                            'es-419': 'Descripción para el panel de roles de reacción'
+                        })
                         .setRequired(true)
                 )
                 .addRoleOption(option =>
                     option.setName('role1')
+                        .setNameLocalizations({
+                            'es-ES': 'rol1',
+                            'es-419': 'rol1'
+                        })
                         .setDescription('First role to add')
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Primer rol a añadir',
+                            'es-419': 'Primer rol a añadir'
+                        })
                         .setRequired(true)
                 )
                 .addRoleOption(option =>
                     option.setName('role2')
+                        .setNameLocalizations({
+                            'es-ES': 'rol2',
+                            'es-419': 'rol2'
+                        })
                         .setDescription('Second role to add')
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Segundo rol a añadir',
+                            'es-419': 'Segundo rol a añadir'
+                        })
                         .setRequired(false)
                 )
                 .addRoleOption(option =>
                     option.setName('role3')
+                        .setNameLocalizations({
+                            'es-ES': 'rol3',
+                            'es-419': 'rol3'
+                        })
                         .setDescription('Third role to add')
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Tercer rol a añadir',
+                            'es-419': 'Tercer rol a añadir'
+                        })
                         .setRequired(false)
                 )
                 .addRoleOption(option =>
                     option.setName('role4')
+                        .setNameLocalizations({
+                            'es-ES': 'rol4',
+                            'es-419': 'rol4'
+                        })
                         .setDescription('Fourth role to add')
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Cuarto rol a añadir',
+                            'es-419': 'Cuarto rol a añadir'
+                        })
                         .setRequired(false)
                 )
                 .addRoleOption(option =>
                     option.setName('role5')
+                        .setNameLocalizations({
+                            'es-ES': 'rol5',
+                            'es-419': 'rol5'
+                        })
                         .setDescription('Fifth role to add')
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Quinto rol a añadir',
+                            'es-419': 'Quinto rol a añadir'
+                        })
                         .setRequired(false)
                 )
         )
         .addSubcommand(subcommand =>
             subcommand
                 .setName('dashboard')
+                .setNameLocalizations({
+                    'es-ES': 'panel',
+                    'es-419': 'panel'
+                })
                 .setDescription('Manage and configure your reaction role panels')
+                .setDescriptionLocalizations({
+                    'es-ES': 'Administra y configura tus paneles de roles de reacción',
+                    'es-419': 'Administra y configura tus paneles de roles de reacción'
+                })
                 .addStringOption(option =>
                     option
                         .setName('panel')
+                        .setNameLocalizations({
+                            'es-ES': 'panel',
+                            'es-419': 'panel'
+                        })
                         .setDescription('Select a reaction role panel to manage')
+                        .setDescriptionLocalizations({
+                            'es-ES': 'Selecciona un panel de roles de reacción a gestionar',
+                            'es-419': 'Selecciona un panel de roles de reacción a gestionar'
+                        })
                         .setRequired(false)
                         .setAutocomplete(true)
                 )
