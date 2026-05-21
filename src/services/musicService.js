@@ -51,27 +51,35 @@ export async function initMusic(client) {
   }
 
   // ── YouTube via youtubei.js (discord-player-youtubei) ──
-  // useClient: 'IOS' avoids YouTube's signature-decipher entirely
-  // (the iOS client returns unsigned stream URLs). This sidesteps the
-  // "Failed to extract signature decipher algorithm" error that
-  // youtubei.js v14 hit when YouTube changed their web player format.
-  // Falls back to ANDROID if IOS fails.
+  // useClient: 'IOS' avoids YouTube's signature-decipher entirely.
+  // On cloud hosts (Railway, Heroku, etc.) YouTube blocks anonymous
+  // streams — passing YOUTUBE_COOKIE (Netscape format) authenticates
+  // the session and bypasses bot-detection.
+  const youtubeCookie = process.env.YOUTUBE_COOKIE || null;
+  if (youtubeCookie) {
+    logger.info('musicService: YOUTUBE_COOKIE found — authenticated YouTube session will be used');
+  } else {
+    logger.warn('musicService: YOUTUBE_COOKIE not set — YouTube streams may be blocked on cloud hosts');
+  }
+
   try {
     await player.extractors.register(YoutubeiExtractor, {
+      authentication: youtubeCookie,
       streamOptions: {
         useClient: 'IOS',
       },
     });
-    logger.info('musicService: YoutubeiExtractor registered (stream client: IOS, no signature decipher)');
+    logger.info('musicService: YoutubeiExtractor registered (IOS client' + (youtubeCookie ? ', authenticated' : ', anonymous') + ')');
   } catch (err) {
     logger.warn('musicService: IOS client failed, retrying with ANDROID', { error: err?.message });
     try {
       await player.extractors.register(YoutubeiExtractor, {
+        authentication: youtubeCookie,
         streamOptions: {
           useClient: 'ANDROID',
         },
       });
-      logger.info('musicService: YoutubeiExtractor registered (ANDROID fallback)');
+      logger.info('musicService: YoutubeiExtractor registered (ANDROID fallback' + (youtubeCookie ? ', authenticated' : ', anonymous') + ')');
     } catch (err2) {
       logger.error('musicService: failed to register YoutubeiExtractor', { error: err2?.message });
     }
@@ -125,8 +133,18 @@ export async function initMusic(client) {
     }).catch(() => {});
   });
 
-  player.events.on('playerError', (queue, err) => {
-    logger.error('music playerError', { error: err?.message, stack: err?.stack?.slice(0, 500) });
+  // Surface stream/player errors to the text channel so they're visible
+  player.events.on('playerError', (queue, err, track) => {
+    const errMsg = String(err?.message || err);
+    logger.error('music playerError', { track: track?.title, error: errMsg, stack: err?.stack?.slice(0, 500) });
+    const L = lang(queue);
+    queue.metadata?.channel?.send({
+      embeds: [{
+        color: 0xef4444,
+        title: t(L, 'wolf.music.errorTitle'),
+        description: `❌ \`${track?.title?.slice(0, 80) || 'Pista'}\`\n\`\`\`${errMsg.slice(0, 500)}\`\`\``,
+      }],
+    }).catch(() => {});
   });
 
   player.events.on('error', (queue, err) => {
