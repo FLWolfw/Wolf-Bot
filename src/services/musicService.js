@@ -37,25 +37,19 @@ export async function initMusic(client) {
   }
 
   // ── YouTube via youtubei.js + BotGuard (discord-player-youtubei) ──
-  // innertubeClient: 'TV_EMBEDDED' bypasses the strict bot-checks that
-  // YouTube applies to the default 'WEB' client. Falls back to
-  // 'ANDROID' if TV_EMBEDDED is ever restricted in the future.
+  // Default WEB client + bgutils-js BotGuard works for both metadata
+  // AND stream URLs. TV_EMBEDDED was tried but its stream URLs don't
+  // play through ffmpeg/opus on Alpine — queue would fill but never
+  // actually play audio. Default behaviour is most reliable.
   try {
     await player.extractors.register(YoutubeiExtractor, {
-      innertubeClient: 'TV_EMBEDDED',
+      streamOptions: {
+        useClient: 'WEB',
+      },
     });
-    logger.info('musicService: YoutubeiExtractor registered (client: TV_EMBEDDED)');
+    logger.info('musicService: YoutubeiExtractor registered (default WEB + BotGuard)');
   } catch (err) {
-    // If TV_EMBEDDED fails, try ANDROID as fallback
-    logger.warn('musicService: TV_EMBEDDED failed, retrying with ANDROID', { error: err?.message });
-    try {
-      await player.extractors.register(YoutubeiExtractor, {
-        innertubeClient: 'ANDROID',
-      });
-      logger.info('musicService: YoutubeiExtractor registered (client: ANDROID fallback)');
-    } catch (err2) {
-      logger.error('musicService: failed to register YoutubeiExtractor', { error: err2?.message });
-    }
+    logger.error('musicService: failed to register YoutubeiExtractor', { error: err?.message });
   }
 
   const registeredCount = player.extractors.size;
