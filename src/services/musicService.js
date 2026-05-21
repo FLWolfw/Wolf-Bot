@@ -79,34 +79,30 @@ export async function initMusic(client) {
   }
 
   // ── YouTube via youtubei.js (discord-player-youtubei) ──
-  // useClient: 'IOS' avoids YouTube's signature-decipher entirely.
-  // On cloud hosts (Railway, etc.) YouTube blocks anonymous streams.
-  // YOUTUBE_COOKIE must be in Netscape format (exported from browser).
-  // We convert it to HTTP Cookie header format (name=value; name2=value2)
-  // and pass it via streamOptions.cookie.
-  // NOTE: `authentication` expects an OAuth2 token (access_token=XXX),
-  // NOT cookies — never pass raw Netscape cookies to `authentication`.
+  // Cookies MUST be passed via innertubeConfigRaw.cookie (HTTP header format).
+  // `authentication` = OAuth2 token only. `streamOptions.cookie` = doesn't exist.
+  // TV_EMBEDDED client is most resilient on cloud IPs (Railway, etc.).
   const rawCookie = process.env.YOUTUBE_COOKIE || null;
   const cookieHeader = rawCookie ? parseCookiesToHeader(rawCookie) : null;
 
   if (cookieHeader) {
     const cookieCount = cookieHeader.split(';').length;
-    logger.info(`musicService: YOUTUBE_COOKIE parsed — ${cookieCount} cookies loaded for authenticated YT session`);
+    logger.info(`musicService: YOUTUBE_COOKIE parsed — ${cookieCount} cookies for authenticated YT session`);
   } else {
     logger.warn('musicService: YOUTUBE_COOKIE not set — YouTube streams may be blocked on cloud hosts');
   }
 
-  // Build extractor options — try IOS first (no signature decipher needed),
-  // fall back to TV_EMBEDDED (more lenient on cloud IPs).
-  const makeExtractorOpts = (client) => ({
-    streamOptions: {
-      useClient: client,
+  const makeExtractorOpts = (clientName) => ({
+    innertubeConfigRaw: {
       ...(cookieHeader && { cookie: cookieHeader }),
+    },
+    streamOptions: {
+      useClient: clientName,
     },
   });
 
   let youtubeRegistered = false;
-  for (const clientName of ['IOS', 'TV_EMBEDDED', 'ANDROID']) {
+  for (const clientName of ['TV_EMBEDDED', 'IOS', 'ANDROID']) {
     try {
       await player.extractors.register(YoutubeiExtractor, makeExtractorOpts(clientName));
       logger.info(`musicService: YoutubeiExtractor registered (${clientName}${cookieHeader ? ', authenticated' : ', anonymous'})`);
