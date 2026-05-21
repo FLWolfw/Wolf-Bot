@@ -12,8 +12,11 @@ RUN apk add --no-cache ffmpeg
 # A wildcard is used to ensure both package.json AND package-lock.json are copied
 COPY package*.json ./
 
-# Install only production dependencies
-RUN npm ci --omit=dev
+# Install only production dependencies.
+# Using `npm install` (not `npm ci`) so npm can resolve newer transitive
+# deps when we bump `discord-player-youtubei` to `latest` — YouTube
+# breaks youtubei.js periodically and we need the latest patches.
+RUN npm install --omit=dev --no-audit --no-fund
 
 # Bundle app source
 COPY . .

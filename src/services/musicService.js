@@ -36,20 +36,31 @@ export async function initMusic(client) {
     logger.error('musicService: failed to load DefaultExtractors', { error: err?.message });
   }
 
-  // ── YouTube via youtubei.js + BotGuard (discord-player-youtubei) ──
-  // Default WEB client + bgutils-js BotGuard works for both metadata
-  // AND stream URLs. TV_EMBEDDED was tried but its stream URLs don't
-  // play through ffmpeg/opus on Alpine — queue would fill but never
-  // actually play audio. Default behaviour is most reliable.
+  // ── YouTube via youtubei.js (discord-player-youtubei) ──
+  // useClient: 'IOS' avoids YouTube's signature-decipher entirely
+  // (the iOS client returns unsigned stream URLs). This sidesteps the
+  // "Failed to extract signature decipher algorithm" error that
+  // youtubei.js v14 hit when YouTube changed their web player format.
+  // Falls back to ANDROID if IOS fails.
   try {
     await player.extractors.register(YoutubeiExtractor, {
       streamOptions: {
-        useClient: 'WEB',
+        useClient: 'IOS',
       },
     });
-    logger.info('musicService: YoutubeiExtractor registered (default WEB + BotGuard)');
+    logger.info('musicService: YoutubeiExtractor registered (stream client: IOS, no signature decipher)');
   } catch (err) {
-    logger.error('musicService: failed to register YoutubeiExtractor', { error: err?.message });
+    logger.warn('musicService: IOS client failed, retrying with ANDROID', { error: err?.message });
+    try {
+      await player.extractors.register(YoutubeiExtractor, {
+        streamOptions: {
+          useClient: 'ANDROID',
+        },
+      });
+      logger.info('musicService: YoutubeiExtractor registered (ANDROID fallback)');
+    } catch (err2) {
+      logger.error('musicService: failed to register YoutubeiExtractor', { error: err2?.message });
+    }
   }
 
   const registeredCount = player.extractors.size;
