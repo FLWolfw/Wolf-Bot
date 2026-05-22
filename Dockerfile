@@ -3,10 +3,12 @@ FROM node:20-alpine
 # Create app directory
 WORKDIR /usr/src/app
 
-# System packages: ffmpeg is required by discord-player for audio
-# transcoding (music). Installing the alpine package is more reliable
-# than ffmpeg-static, whose bundled binary doesn't match alpine's musl.
-RUN apk add --no-cache ffmpeg
+# System packages: ffmpeg for audio transcoding, python3 + curl for yt-dlp.
+# yt-dlp is required by discord-player-youtubei v2 for YouTube streaming —
+# it handles YouTube's IP-based blocks better than the pure JS extractors.
+RUN apk add --no-cache ffmpeg python3 curl \
+    && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp
 
 # Install app dependencies.
 # Copy ONLY package.json — we deliberately don't copy package-lock.json so

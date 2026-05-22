@@ -78,10 +78,10 @@ export async function initMusic(client) {
     logger.error('musicService: failed to load DefaultExtractors', { error: err?.message });
   }
 
-  // ── YouTube via youtubei.js (discord-player-youtubei) ──
-  // Cookies MUST be passed via innertubeConfigRaw.cookie (HTTP header format).
-  // `authentication` = OAuth2 token only. `streamOptions.cookie` = doesn't exist.
-  // TV_EMBEDDED client is most resilient on cloud IPs (Railway, etc.).
+  // ── YouTube via discord-player-youtubei v2 + yt-dlp ──
+  // v2 uses yt-dlp (installed in Dockerfile) as the primary stream extractor.
+  // yt-dlp handles Railway's IP blocks far better than the pure-JS clients.
+  // Cookies (innertubeConfigRaw.cookie) add authenticated session on top.
   const rawCookie = process.env.YOUTUBE_COOKIE || null;
   const cookieHeader = rawCookie ? parseCookiesToHeader(rawCookie) : null;
 
@@ -89,32 +89,36 @@ export async function initMusic(client) {
     const cookieCount = cookieHeader.split(';').length;
     logger.info(`musicService: YOUTUBE_COOKIE parsed — ${cookieCount} cookies for authenticated YT session`);
   } else {
-    logger.warn('musicService: YOUTUBE_COOKIE not set — YouTube streams may be blocked on cloud hosts');
+    logger.warn('musicService: YOUTUBE_COOKIE not set — yt-dlp will run in anonymous mode');
   }
 
-  const makeExtractorOpts = (clientName) => ({
+  const extractorOpts = {
     innertubeConfigRaw: {
       ...(cookieHeader && { cookie: cookieHeader }),
     },
     streamOptions: {
-      useClient: clientName,
+      useClient: 'TV_EMBEDDED',
     },
-  });
+    // Tell youtube-dl-exec where yt-dlp lives (installed in Dockerfile)
+    ytDlpOptions: {
+      binaryPath: '/usr/local/bin/yt-dlp',
+    },
+  };
 
-  let youtubeRegistered = false;
-  for (const clientName of ['TV_EMBEDDED', 'IOS', 'ANDROID']) {
+  try {
+    await player.extractors.register(YoutubeiExtractor, extractorOpts);
+    logger.info(`musicService: YoutubeiExtractor v2 registered (TV_EMBEDDED, yt-dlp @ /usr/local/bin/yt-dlp${cookieHeader ? ', authenticated' : ', anonymous'})`);
+  } catch (err) {
+    logger.warn(`musicService: TV_EMBEDDED failed, retrying with IOS — ${err?.message}`);
     try {
-      await player.extractors.register(YoutubeiExtractor, makeExtractorOpts(clientName));
-      logger.info(`musicService: YoutubeiExtractor registered (${clientName}${cookieHeader ? ', authenticated' : ', anonymous'})`);
-      youtubeRegistered = true;
-      break;
-    } catch (err) {
-      logger.warn(`musicService: ${clientName} client failed — ${err?.message}`);
+      await player.extractors.register(YoutubeiExtractor, {
+        ...extractorOpts,
+        streamOptions: { useClient: 'IOS' },
+      });
+      logger.info('musicService: YoutubeiExtractor v2 registered (IOS fallback)');
+    } catch (err2) {
+      logger.error(`musicService: failed to register YoutubeiExtractor — ${err2?.message}`);
     }
-  }
-
-  if (!youtubeRegistered) {
-    logger.error('musicService: failed to register YoutubeiExtractor with any client — YouTube will not work');
   }
 
   const registeredCount = player.extractors.size;
@@ -123,6 +127,7 @@ export async function initMusic(client) {
   if (registeredCount === 0) {
     logger.warn('musicService: no extractors registered — /music play will not work');
   }
+
 
   const lang = (queue) => queue.metadata?.lang === 'en' ? 'en' : 'es';
 

@@ -20,7 +20,7 @@
     "@discordjs/voice": "^0.18.0",
     "axios": "^1.16.0",
     "discord-player": "^7.2.0",
-    "discord-player-youtubei": "^1.5.0",
+    "discord-player-youtubei": "^2.0.0",
     "discord.js": "^14.15.3",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
@@ -30,6 +30,7 @@
     "pg": "^8.11.3",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
+    "youtube-dl-exec": "^3.0.0",
     "zod": "^3.25.76"
   },
   "overrides": {
