@@ -154,7 +154,20 @@ async function handlePlay(interaction, lang, config) {
     return embed(interaction, 0xef4444, t(lang, 'wolf.music.noPerms'), t(lang, 'wolf.music.noPermsDesc', { channel: `${vc}` }));
   }
 
-  const query = interaction.options.getString('query', true);
+  const rawQuery = interaction.options.getString('query', true);
+
+  // Expand youtu.be short URLs → full youtube.com/watch?v= URLs.
+  // YoutubeiExtractor validates against 'youtube.com' patterns; short
+  // links cause 'Extractor: N/A'. Full URLs are always matched correctly.
+  let query = rawQuery;
+  try {
+    const u = new URL(rawQuery);
+    if (u.hostname === 'youtu.be') {
+      const videoId = u.pathname.slice(1); // remove leading slash
+      query = `https://www.youtube.com/watch?v=${videoId}`;
+    }
+  } catch { /* not a URL — treat as search query, no change needed */ }
+
   await interaction.deferReply();
 
   const stayInVC = Boolean(config?.music?.stayInVC);

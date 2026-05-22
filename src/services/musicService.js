@@ -99,10 +99,8 @@ export async function initMusic(client) {
     streamOptions: {
       useClient: 'TV_EMBEDDED',
     },
-    // Tell youtube-dl-exec where yt-dlp lives (installed in Dockerfile)
-    ytDlpOptions: {
-      binaryPath: '/usr/local/bin/yt-dlp',
-    },
+    // yt-dlp is installed at /usr/local/bin/yt-dlp (in PATH on Alpine).
+    // youtube-dl-exec finds it automatically without needing binaryPath.
   };
 
   try {
