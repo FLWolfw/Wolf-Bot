@@ -40,6 +40,11 @@ TitanBot offers a complete suite of tools for Discord server management and comm
 - **Wanted Poster** - Create fun wanted images
 - **Text Reversal** - Reverse any text
 
+### Music Player
+- **Play Command** - Search or play URLs from YouTube, Spotify, SoundCloud, and more
+- **Queue Controls** - Skip, remove, shuffle, pause, resume, and stop tracks
+- **Playback Modes** - Volume, loop, autoplay, and 24/7 voice-channel mode
+
 ### 🎫 Advanced Ticket System
 - **Claim & Priority** - Staff ticket management
 - **Ticket Limits** - Prevent spam

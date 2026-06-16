@@ -2,6 +2,7 @@ import { basePage, esc, brandMark, BRAND, TAGLINE, SUPPORT } from './layout.js';
 import { icon } from './icons.js';
 
 const FEATURES = [
+  ['star', 'Music', 'Play songs and playlists with queue, volume, loop, and 24/7 mode.'],
   ['gavel', 'Moderación', 'Ban, kick, timeout, purge, notas y casos con registro completo.'],
   ['bell', 'Auditoría total', 'Más de 25 eventos: canales, roles, miembros, mensajes y más.'],
   ['bolt', 'Economía', 'Tienda, banco, trabajo, apuestas y ranking.'],

@@ -47,6 +47,7 @@ web_modules/
 
 # npm cache
 .npm
+.npm-cache/
 
 # eslint / stylelint
 .eslintcache

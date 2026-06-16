@@ -27,6 +27,7 @@ const CATEGORY_ICONS = {
     Moderation: "🛡️",
     Economy: "💰",
     Fun: "🎮",
+    Music: "🎵",
     Leveling: "📊",
     Utility: "🔧",
     Ticket: "🎫",
@@ -94,6 +95,11 @@ export async function createInitialHelpMenu(client, lang = 'es') {
         {
             name: "🎮 **Fun**",
             value: "Games, entertainment, and interactive commands",
+            inline: true
+        },
+        {
+            name: "🎵 **Music**",
+            value: "Play songs, playlists, queue controls, volume, loop, and 24/7 mode",
             inline: true
         },
         {
@@ -224,5 +230,4 @@ export default {
         }, HELP_MENU_TIMEOUT_MS);
     },
 };
-
 

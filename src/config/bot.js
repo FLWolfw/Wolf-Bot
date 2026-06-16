@@ -471,6 +471,7 @@ export const botConfig = {
 
     // Utility/quality-of-life modules.
     voice: true,
+    music: true,
     search: true,
     tools: true,
     utility: true,
@@ -559,7 +560,6 @@ export function getRandomColor() {
 }
 
 export default botConfig;
-
 
 
 
