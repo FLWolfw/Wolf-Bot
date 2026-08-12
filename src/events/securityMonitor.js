@@ -1,6 +1,7 @@
 import { AuditLogEvent, Events } from 'discord.js';
 import { fetchExecutor } from '../utils/auditLog.js';
-import { antiBan, antiChannelCreate, antiChannelDelete, antiRoleCreate, antiRoleDelete, antiRoleUpdate, antiMemberPermissionChange, cleanupAntiNukeState } from '../security/antiNuke.js';
+import { antiBan, antiChannelCreate, antiChannelDelete, antiRoleCreate, antiRoleDelete, antiRoleUpdate, antiMemberPermissionChange, cleanupAntiNukeState, handleQuarantineBypass } from '../security/antiNuke.js';
+import { getQuarantine } from '../services/quarantineService.js';
 import { persistAuditLogEntry, persistSecurityLog, enrichSecurityLog } from '../services/securityLogService.js';
 import { logger } from '../utils/logger.js';
 
@@ -28,15 +29,42 @@ async function processEvent(client, eventName, target) {
 async function processMemberRoleUpdate(client, oldMember, newMember) {
   const guild = newMember?.guild || oldMember?.guild;
   if (!guild) return;
+
   const oldIds = new Set(oldMember.roles.cache.keys());
   const addedRoleIds = newMember.roles.cache.filter((role) => !oldIds.has(role.id)).map((role) => role.id);
   const removedRoleIds = oldMember.roles.cache.filter((role) => !newMember.roles.cache.has(role.id) && role.id !== guild.id).map((role) => role.id);
-  if (!addedRoleIds.length && !removedRoleIds.length) return;
+  const oldTimeout = oldMember.communicationDisabledUntilTimestamp || null;
+  const newTimeout = newMember.communicationDisabledUntilTimestamp || null;
+  const timeoutRemoved = Boolean(oldTimeout && oldTimeout > Date.now() && !newTimeout);
+
+  if (!addedRoleIds.length && !removedRoleIds.length && !timeoutRemoved) return;
 
   const targetId = newMember.id;
   const resolved = await fetchExecutor(guild, AuditLogEvent.MemberRoleUpdate, { targetId });
   const executor = resolved?.executor || null;
+  const wolfAutomation = Boolean(executor?.id && executor.id === client.user?.id);
   const automation = Boolean(executor?.bot);
+
+  const quarantine = await getQuarantine(client.db, guild.id, targetId);
+  if (quarantine?.active && !wolfAutomation) {
+    const bypass = await handleQuarantineBypass(newMember, executor, client, {
+      addedRoleIds,
+      addedRoles: addedRoleIds.map((id) => {
+        const role = guild.roles.cache.get(id);
+        return role ? { id: role.id, name: role.name, position: role.position, permissions: role.permissions.toArray() } : { id };
+      }),
+      removedRoleIds,
+      timeoutRemoved,
+      timeoutBefore: oldTimeout ? new Date(oldTimeout).toISOString() : null,
+      timeoutAfter: newTimeout ? new Date(newTimeout).toISOString() : null,
+      bypassSource: timeoutRemoved && !addedRoleIds.length ? 'timeout_removed' : (addedRoleIds.length ? 'role_restored' : 'member_update'),
+      executorBot: Boolean(executor?.bot),
+    });
+
+    // Wolf's own role removal/timeout is already accounted for above. Do not
+    // process the same mutation as a normal Anti-Nuke action.
+    if (bypass || wolfAutomation) return;
+  }
 
   const metadata = {
     targetUsername: newMember.user?.username || null,
@@ -49,6 +77,11 @@ async function processMemberRoleUpdate(client, oldMember, newMember) {
       const role = guild.roles.cache.get(id) || oldMember.roles.cache.get(id);
       return role ? { id: role.id, name: role.name, position: role.position, permissions: role.permissions.toArray() } : { id };
     }),
+    timeout: {
+      before: oldTimeout ? new Date(oldTimeout).toISOString() : null,
+      after: newTimeout ? new Date(newTimeout).toISOString() : null,
+      removed: timeoutRemoved,
+    },
     audit: resolved ? { id: resolved.id, changes: resolved.changes || [], options: resolved.options || null } : null,
     automation,
     source: automation ? 'wolf_automation' : 'discord_action',
@@ -57,7 +90,7 @@ async function processMemberRoleUpdate(client, oldMember, newMember) {
   await persistSecurityLog(client.db, {
     guildId: guild.id,
     eventType: automation ? 'wolf.action.member.role.update' : 'member.role.update',
-    severity: automation ? 'info' : 'warning',
+    severity: automation ? 'info' : (timeoutRemoved ? 'critical' : 'warning'),
     executorId: executor?.id || null,
     executorTag: executor?.tag || executor?.username || null,
     targetId,
@@ -67,9 +100,7 @@ async function processMemberRoleUpdate(client, oldMember, newMember) {
     metadata,
   });
 
-  // Las acciones hechas por Wolf quedan registradas como automatización y nunca
-  // vuelven a entrar al motor Anti-Nuke como si fueran acciones del atacante.
-  if (automation || !executor || executor.id === guild.ownerId) return;
+  if (wolfAutomation || !executor || executor.id === guild.ownerId) return;
 
   await antiMemberPermissionChange(newMember, executor, client, addedRoleIds);
 }
@@ -116,6 +147,6 @@ export function registerSecurityMonitor(client) {
   client.on(Events.GuildMemberUpdate, (oldMember, newMember) => processMemberRoleUpdate(client, oldMember, newMember).catch((error) => logger.error('Security member-role monitor failed', { error: error?.message })));
   client.on(Events.GuildRoleUpdate, (oldRole, newRole) => processRoleUpdate(client, oldRole, newRole).catch((error) => logger.error('Security role monitor failed', { error: error?.message })));
   client.on(Events.GuildAuditLogEntryCreate, (entry, guild) => processAuditEntry(client, entry, guild).catch((error) => logger.error('Audit persistence failed', { error: error?.message })));
-  const timer = setInterval(cleanupAntiNukeState, 60_000); timer.unref?.(); logger.info('🛡️ Wolf Security monitor registered', { events: Object.keys(EVENT_CONFIG), auditLogStream: true, privilegeEscalation: true }); return true;
+  const timer = setInterval(cleanupAntiNukeState, 60_000); timer.unref?.(); logger.info('🛡️ Wolf Security monitor registered', { events: Object.keys(EVENT_CONFIG), auditLogStream: true, privilegeEscalation: true, persistentQuarantine: true }); return true;
 }
 export default { name: Events.ClientReady, once: true, async execute(readyClient, injectedClient) { registerSecurityMonitor(injectedClient || readyClient); } };
