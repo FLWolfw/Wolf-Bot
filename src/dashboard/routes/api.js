@@ -117,6 +117,7 @@ export function apiRoutes(client) {
 
   router.post('/server/:id/security', async (req, res) => {
     try {
+      const current = await getGuildConfig(client.db, req.guild.id);
       const thresholds = {
         channelDelete: clampInt(req.body.channelDelete, 1, 50, 3),
         channelCreate: clampInt(req.body.channelCreate, 1, 50, 5),
@@ -127,6 +128,7 @@ export function apiRoutes(client) {
         ban: clampInt(req.body.ban, 1, 50, 3),
         kick: clampInt(req.body.kick, 1, 50, 3),
         webhook: clampInt(req.body.webhook, 1, 50, 2),
+        dangerousPermission: clampInt(req.body.dangerousPermission, 1, 50, 1),
       };
       const protections = {
         channelDelete: req.body.protectChannelDelete === '1',
@@ -143,9 +145,13 @@ export function apiRoutes(client) {
       const safeRoleIds = roleIdList(req.guild, req.body.safeRoleIds);
       const protectedRoleIds = roleIdList(req.guild, req.body.protectedRoleIds);
       const action = ['alert', 'quarantine', 'ban'].includes(req.body.action) ? req.body.action : 'quarantine';
+      const emergencyMode = req.body.emergencyMode === undefined
+        ? Boolean(current.antiNuke?.emergencyMode)
+        : req.body.emergencyMode === '1';
 
       await updateAntiNukeConfig(client.db, req.guild.id, {
         enabled: req.body.enabled === '1',
+        emergencyMode,
         windowMs: clampInt(req.body.windowMs, 1000, 60000, 10000),
         incidentWindowMs: clampInt(req.body.incidentWindowMs, 5000, 120000, 30000),
         action,
