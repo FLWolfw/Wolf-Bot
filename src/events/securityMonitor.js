@@ -17,37 +17,61 @@ async function processEvent(client, eventName, target) {
   if (!guild) return;
   const cfg = EVENT_CONFIG[eventName];
   if (!cfg) return;
-  const targetId = target?.id || target?.user?.id || null;
-  const resolved = await fetchExecutor(guild, cfg.audit, targetId ? { targetId } : {});
-  const executor = resolved?.executor || null;
 
-  await persistSecurityLog(client.db, {
+  const targetId = target?.id || target?.user?.id || null;
+  const baseRecord = {
     guildId: guild.id,
     eventType: cfg.type,
     severity: 'warning',
-    executorId: executor?.id || null,
-    executorTag: executor?.tag || executor?.username || null,
     targetId,
     targetType: cfg.targetType,
-    auditLogId: resolved?.id || null,
-    reason: resolved?.reason || null,
     metadata: { name: target?.name || target?.user?.tag || null },
-  });
+  };
+
+  // Persist first. Audit Log resolution is enrichment, never a prerequisite.
+  const saved = await persistSecurityLog(client.db, baseRecord);
+  if (!saved) {
+    logger.error('Security event could not be persisted', { event: cfg.type, guildId: guild.id, targetId });
+  }
+
+  const resolved = await fetchExecutor(guild, cfg.audit, targetId ? { targetId } : {});
+  const executor = resolved?.executor || null;
+
+  if (executor) {
+    await persistSecurityLog(client.db, {
+      ...baseRecord,
+      eventType: `${cfg.type}.resolved`,
+      executorId: executor.id || null,
+      executorTag: executor.tag || executor.username || null,
+      auditLogId: resolved.id || null,
+      reason: resolved.reason || null,
+    });
+  }
 
   if (cfg.anti === antiBan) await cfg.anti(guild, executor, client);
   else await cfg.anti(target, executor, client);
 }
 
+export function registerSecurityMonitor(client) {
+  if (!client || client.__wolfSecurityMonitorRegistered) return false;
+  client.__wolfSecurityMonitorRegistered = true;
+
+  for (const eventName of Object.keys(EVENT_CONFIG)) {
+    client.on(eventName, (target) => processEvent(client, eventName, target).catch((error) => {
+      logger.error('Security monitor failed', { event: eventName, error: error?.message });
+    }));
+  }
+
+  const timer = setInterval(cleanupAntiNukeState, 60_000);
+  timer.unref?.();
+  logger.info('🛡️ Wolf Security monitor registered', { events: Object.keys(EVENT_CONFIG) });
+  return true;
+}
+
 export default {
   name: Events.ClientReady,
   once: true,
-  async execute(client) {
-    for (const eventName of Object.keys(EVENT_CONFIG)) {
-      client.on(eventName, (target) => processEvent(client, eventName, target).catch((error) => {
-        logger.error('Security monitor failed', { event: eventName, error: error?.message });
-      }));
-    }
-    const timer = setInterval(cleanupAntiNukeState, 60_000);
-    timer.unref?.();
+  async execute(readyClient, injectedClient) {
+    registerSecurityMonitor(injectedClient || readyClient);
   },
 };
