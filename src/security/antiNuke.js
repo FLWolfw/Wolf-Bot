@@ -1,6 +1,7 @@
 import { PermissionsBitField } from 'discord.js';
 import { getGuildConfig } from '../services/guildConfigService.js';
 import { createSecurityIncident, persistSecurityLog } from '../services/securityLogService.js';
+import { getQuarantine, setQuarantine, updateQuarantine } from '../services/quarantineService.js';
 import { logger } from '../utils/logger.js';
 
 const trackers = new Map();
@@ -21,6 +22,7 @@ const DEFAULT_THRESHOLDS = {
 
 const DEFAULT_WINDOW_MS = 10000;
 const DEFAULT_INCIDENT_WINDOW_MS = 30000;
+const DEFAULT_QUARANTINE_TIMEOUT_MS = 60 * 60 * 1000;
 
 function key(guildId, executorId, type) {
   return `${guildId}:${executorId}:${type}`;
@@ -34,6 +36,9 @@ function normalizeConfig(config) {
     windowMs: Math.min(60000, Math.max(1000, Number(anti.windowMs) || DEFAULT_WINDOW_MS)),
     incidentWindowMs: Math.min(120000, Math.max(5000, Number(anti.incidentWindowMs) || DEFAULT_INCIDENT_WINDOW_MS)),
     action: ['alert', 'quarantine', 'ban'].includes(anti.action) ? anti.action : 'quarantine',
+    quarantinePersistent: anti.quarantinePersistent !== false,
+    quarantineBypassAction: ['alert', 're_quarantine', 'ban'].includes(anti.quarantineBypassAction) ? anti.quarantineBypassAction : 're_quarantine',
+    quarantineTimeoutMs: Math.min(28 * 24 * 60 * 60 * 1000, Math.max(60 * 1000, Number(anti.quarantineTimeoutMs) || DEFAULT_QUARANTINE_TIMEOUT_MS)),
     thresholds: { ...DEFAULT_THRESHOLDS, ...(anti.thresholds || {}) },
     protections: anti.protections || {},
     safeRoleIds: Array.isArray(anti.safeRoleIds) ? anti.safeRoleIds : [],
@@ -85,7 +90,7 @@ function dangerousPermissionNames(role) {
   return names.filter(([, flag]) => role.permissions.has(flag)).map(([name]) => name);
 }
 
-async function takeAction(member, action, reason) {
+async function takeAction(member, action, reason, { db, incidentId, quarantineTimeoutMs } = {}) {
   if (action === 'alert') return 'alert_only';
 
   try {
@@ -95,10 +100,26 @@ async function takeAction(member, action, reason) {
     }
 
     if (action === 'quarantine' && member.manageable) {
-      const previousRoleIds = member.roles.cache.filter((r) => r.id !== member.guild.id).map((r) => r.id);
+      const existing = await getQuarantine(db, member.guild.id, member.id);
+      const previousRoleIds = existing?.active
+        ? existing.originalRoleIds
+        : member.roles.cache.filter((r) => r.id !== member.guild.id).map((r) => r.id);
+      const timeoutUntil = new Date(Date.now() + quarantineTimeoutMs).toISOString();
+
+      if (db) {
+        await setQuarantine(db, member.guild.id, member.id, {
+          incidentId,
+          reason,
+          originalRoleIds: previousRoleIds,
+          timeoutUntil,
+        });
+      }
+
       await member.roles.set([], reason);
-      if (member.moderatable) await member.timeout(60 * 60 * 1000, reason).catch(() => {});
-      return previousRoleIds.length ? 'quarantine' : 'quarantine';
+      if (member.moderatable) {
+        await member.timeout(quarantineTimeoutMs, reason).catch(() => {});
+      }
+      return 'quarantine';
     }
   } catch (error) {
     logger.error('Anti-nuke action failed', { action, error: error?.message });
@@ -117,7 +138,11 @@ async function openIncident({ db, guild, executor, type, member, actionCount, co
   const reason = emergency
     ? `Wolf Emergency Anti-Nuke: dangerous action detected (${type})`
     : `Wolf Anti-Nuke: ${type} threshold exceeded (${actionCount}/${threshold})`;
-  const actionTaken = await takeAction(member, config.action, reason);
+  const actionTaken = await takeAction(member, config.action, reason, {
+    db,
+    incidentId,
+    quarantineTimeoutMs: config.quarantineTimeoutMs,
+  });
   const incident = { incidentId, createdAt: Date.now(), actionTaken };
   incidents.set(incidentKey, incident);
 
@@ -126,6 +151,9 @@ async function openIncident({ db, guild, executor, type, member, actionCount, co
     limit: threshold,
     windowMs: config.windowMs,
     configuredAction: config.action,
+    quarantinePersistent: config.quarantinePersistent,
+    quarantineBypassAction: config.quarantineBypassAction,
+    quarantineTimeoutMs: config.quarantineTimeoutMs,
     emergency,
     memberManageable: Boolean(member?.manageable),
     memberModeratable: Boolean(member?.moderatable),
@@ -168,6 +196,77 @@ async function openIncident({ db, guild, executor, type, member, actionCount, co
     incidentId,
   });
   return incident;
+}
+
+export async function enforceQuarantine(member, state, client, reason = 'Wolf Anti-Nuke: quarantine enforcement') {
+  if (!member?.guild || !state?.active || !client?.db) return { action: 'none', removedRoleIds: [], timeoutApplied: false };
+  const removedRoleIds = [];
+  let timeoutApplied = false;
+
+  try {
+    if (member.manageable) {
+      const removable = member.roles.cache.filter((role) => role.id !== member.guild.id && role.editable);
+      if (removable.size) {
+        removedRoleIds.push(...removable.map((role) => role.id));
+        await member.roles.remove(removable, reason);
+      }
+    }
+    if (member.moderatable) {
+      const until = state.timeoutUntil ? new Date(state.timeoutUntil).getTime() : Date.now() + DEFAULT_QUARANTINE_TIMEOUT_MS;
+      const duration = Math.max(60 * 1000, until - Date.now());
+      await member.timeout(duration, reason).catch(() => {});
+      timeoutApplied = true;
+      await updateQuarantine(client.db, member.guild.id, member.id, { timeoutUntil: new Date(Date.now() + duration).toISOString() });
+    }
+  } catch (error) {
+    logger.warn('Quarantine enforcement failed', { guildId: member.guild.id, userId: member.id, error: error?.message });
+  }
+
+  return { action: 're_quarantine', removedRoleIds, timeoutApplied };
+}
+
+export async function handleQuarantineBypass(member, executor, client, metadata = {}) {
+  if (!member?.guild || !client?.db) return null;
+  const state = await getQuarantine(client.db, member.guild.id, member.id);
+  if (!state?.active) return null;
+
+  const config = normalizeConfig(await getGuildConfig(client.db, member.guild.id));
+  const action = config.quarantineBypassAction;
+  const reason = `Wolf Anti-Nuke: quarantine bypass detected${executor?.id ? ` by ${executor.tag || executor.username || executor.id}` : ''}`;
+
+  let result = 'alert_only';
+  if (action === 'ban' && member.bannable) {
+    try {
+      await member.ban({ reason });
+      result = 'ban';
+    } catch (error) {
+      logger.warn('Quarantine bypass ban failed', { guildId: member.guild.id, userId: member.id, error: error?.message });
+      result = 'alert_only';
+    }
+  } else if (action === 're_quarantine') {
+    const enforcement = await enforceQuarantine(member, state, client, reason);
+    result = enforcement.action;
+  }
+
+  await persistSecurityLog(client.db, {
+    guildId: member.guild.id,
+    eventType: 'anti_nuke.quarantine_bypass',
+    severity: action === 'ban' ? 'critical' : 'warning',
+    executorId: executor?.id || null,
+    executorTag: executor?.tag || executor?.username || null,
+    targetId: member.id,
+    targetType: 'user',
+    reason,
+    metadata: {
+      quarantineIncidentId: state.incidentId,
+      configuredAction: action,
+      actionTaken: result,
+      originalRoleIds: state.originalRoleIds || [],
+      ...metadata,
+    },
+  });
+
+  return { state, actionTaken: result };
 }
 
 async function handleAction(type, guild, executor, client, options = {}) {
