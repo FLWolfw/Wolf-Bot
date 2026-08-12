@@ -31,6 +31,7 @@ const DEFAULT_CONFIG = {
   // 🛡️ PER-GUILD ANTI-NUKE
   antiNuke: {
     enabled: true,
+    emergencyMode: true,
     windowMs: 10000,
     incidentWindowMs: 30000,
     action: 'quarantine',
@@ -44,6 +45,7 @@ const DEFAULT_CONFIG = {
       ban: 3,
       kick: 3,
       webhook: 2,
+      dangerousPermission: 1,
     },
     protections: {
       channelDelete: true,
@@ -153,6 +155,7 @@ export async function getGuildConfig(db, guildId) {
     updated = true;
   }
   if (typeof config.antiNuke.enabled !== 'boolean') { config.antiNuke.enabled = d.enabled; updated = true; }
+  if (typeof config.antiNuke.emergencyMode !== 'boolean') { config.antiNuke.emergencyMode = d.emergencyMode; updated = true; }
   if (!Number.isFinite(Number(config.antiNuke.windowMs))) { config.antiNuke.windowMs = d.windowMs; updated = true; }
   if (!Number.isFinite(Number(config.antiNuke.incidentWindowMs))) { config.antiNuke.incidentWindowMs = d.incidentWindowMs; updated = true; }
   if (!['alert','quarantine','ban'].includes(config.antiNuke.action)) { config.antiNuke.action = d.action; updated = true; }
