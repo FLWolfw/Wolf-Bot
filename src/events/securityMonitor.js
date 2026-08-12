@@ -21,7 +21,7 @@ async function processEvent(client, eventName, target) {
   const logId = await persistSecurityLog(client.db, { guildId: guild.id, eventType: cfg.type, severity: 'warning', targetId, targetType: cfg.targetType, metadata: targetMetadata(eventName, target) });
   if (!logId) logger.error('Security event could not be persisted', { event: cfg.type, guildId: guild.id, targetId });
   const resolved = await fetchExecutor(guild, cfg.audit, targetId ? { targetId } : {}); const executor = resolved?.executor || null;
-  if (logId) await enrichSecurityLog(client.db, logId, { executorId: executor?.id || null, executorTag: executor?.tag || executor?.username || null, auditLogId: resolved?.id || null, reason: resolved?.reason || null, metadata: { executor: executor ? { id: executor.id || null, tag: executor.tag || executor.username || null, username: executor.username || null, globalName: executor.globalName || null, bot: executor.bot ?? null } : null, audit: resolved ? { id: resolved.id || null, action: resolved.action ?? null, createdTimestamp: resolved.createdTimestamp || null, reason: resolved.reason || null, targetId: resolved.targetId || targetId || null, targetName: resolved.targetName || null, changes: resolved.changes || [], options: resolved.options || null } : null, resolved: Boolean(executor) } });
+  if (logId) await enrichSecurityLog(client.db, logId, { executorId: executor?.id || null, executorTag: executor?.tag || executor?.username || null, auditLogId: resolved?.id || null, reason: resolved?.reason || null, metadata: { executor: executor ? { id: executor.id || null, tag: executor.tag || executor.username || null, username: executor.username || null, globalName: executor.globalName || null, bot: executor.bot ?? null } : null, audit: resolved ? { id: resolved.id || null, action: resolved.action ?? null, createdTimestamp: resolved.createdTimestamp || null, reason: resolved.reason || null, targetId: resolved.targetId || targetId || null, targetName: resolved.targetName || null, changes: resolved.changes || [], options: resolved.options || null } : null, resolved: Boolean(executor), automation: Boolean(executor?.bot), source: executor?.bot ? 'wolf_automation' : 'discord_action' } });
   if (cfg.anti === antiBan) await cfg.anti(guild, executor, client); else await cfg.anti(target, executor, client);
 }
 
@@ -30,32 +30,46 @@ async function processMemberRoleUpdate(client, oldMember, newMember) {
   if (!guild) return;
   const oldIds = new Set(oldMember.roles.cache.keys());
   const addedRoleIds = newMember.roles.cache.filter((role) => !oldIds.has(role.id)).map((role) => role.id);
-  if (!addedRoleIds.length) return;
+  const removedRoleIds = oldMember.roles.cache.filter((role) => !newMember.roles.cache.has(role.id) && role.id !== guild.id).map((role) => role.id);
+  if (!addedRoleIds.length && !removedRoleIds.length) return;
 
   const targetId = newMember.id;
   const resolved = await fetchExecutor(guild, AuditLogEvent.MemberRoleUpdate, { targetId });
   const executor = resolved?.executor || null;
-  if (!executor || executor.bot || executor.id === guild.ownerId) return;
+  const automation = Boolean(executor?.bot);
+
+  const metadata = {
+    targetUsername: newMember.user?.username || null,
+    targetGlobalName: newMember.user?.globalName || null,
+    addedRoles: addedRoleIds.map((id) => {
+      const role = guild.roles.cache.get(id);
+      return role ? { id: role.id, name: role.name, position: role.position, permissions: role.permissions.toArray() } : { id };
+    }),
+    removedRoles: removedRoleIds.map((id) => {
+      const role = guild.roles.cache.get(id) || oldMember.roles.cache.get(id);
+      return role ? { id: role.id, name: role.name, position: role.position, permissions: role.permissions.toArray() } : { id };
+    }),
+    audit: resolved ? { id: resolved.id, changes: resolved.changes || [], options: resolved.options || null } : null,
+    automation,
+    source: automation ? 'wolf_automation' : 'discord_action',
+  };
 
   await persistSecurityLog(client.db, {
     guildId: guild.id,
-    eventType: 'member.role.add',
-    severity: 'warning',
-    executorId: executor.id,
-    executorTag: executor.tag || executor.username || null,
+    eventType: automation ? 'wolf.action.member.role.update' : 'member.role.update',
+    severity: automation ? 'info' : 'warning',
+    executorId: executor?.id || null,
+    executorTag: executor?.tag || executor?.username || null,
     targetId,
     targetType: 'user',
     auditLogId: resolved?.id || null,
-    reason: resolved?.reason || null,
-    metadata: {
-      targetUsername: newMember.user?.username || null,
-      addedRoles: addedRoleIds.map((id) => {
-        const role = guild.roles.cache.get(id);
-        return role ? { id: role.id, name: role.name, position: role.position, permissions: role.permissions.toArray() } : { id };
-      }),
-      audit: resolved ? { id: resolved.id, changes: resolved.changes || [], options: resolved.options || null } : null,
-    },
+    reason: automation ? 'Wolf ejecutó una acción automática de seguridad (quarantine)' : (resolved?.reason || null),
+    metadata,
   });
+
+  // Las acciones hechas por Wolf quedan registradas como automatización y nunca
+  // vuelven a entrar al motor Anti-Nuke como si fueran acciones del atacante.
+  if (automation || !executor || executor.id === guild.ownerId) return;
 
   await antiMemberPermissionChange(newMember, executor, client, addedRoleIds);
 }
@@ -68,26 +82,29 @@ async function processRoleUpdate(client, oldRole, newRole) {
   if (!dangerousChanged && !protectedChanged) return;
   const resolved = await fetchExecutor(guild, AuditLogEvent.RoleUpdate, { targetId: newRole.id });
   const executor = resolved?.executor || null;
-  if (!executor || executor.bot || executor.id === guild.ownerId) return;
+  const automation = Boolean(executor?.bot);
 
   await persistSecurityLog(client.db, {
     guildId: guild.id,
-    eventType: 'role.update',
-    severity: dangerousChanged ? 'critical' : 'warning',
-    executorId: executor.id,
-    executorTag: executor.tag || executor.username || null,
+    eventType: automation ? 'wolf.action.role.update' : 'role.update',
+    severity: automation ? 'info' : (dangerousChanged ? 'critical' : 'warning'),
+    executorId: executor?.id || null,
+    executorTag: executor?.tag || executor?.username || null,
     targetId: newRole.id,
     targetType: 'role',
     auditLogId: resolved?.id || null,
-    reason: resolved?.reason || null,
+    reason: automation ? 'Wolf ejecutó una acción automática de seguridad' : (resolved?.reason || null),
     metadata: {
       role: { id: newRole.id, name: newRole.name, position: newRole.position, permissions: newRole.permissions.toArray(), color: newRole.hexColor, mentionable: newRole.mentionable },
       oldRole: { name: oldRole.name, position: oldRole.position, permissions: oldRole.permissions.toArray(), color: oldRole.hexColor, mentionable: oldRole.mentionable },
       dangerousPermissionsChanged: dangerousChanged,
+      automation,
+      source: automation ? 'wolf_automation' : 'discord_action',
       audit: resolved ? { id: resolved.id, changes: resolved.changes || [], options: resolved.options || null } : null,
     },
   });
 
+  if (automation || !executor || executor.id === guild.ownerId) return;
   if (dangerousChanged) await antiRoleUpdate(newRole, executor, client);
 }
 
