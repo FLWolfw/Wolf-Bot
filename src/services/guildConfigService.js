@@ -35,6 +35,9 @@ const DEFAULT_CONFIG = {
     windowMs: 10000,
     incidentWindowMs: 30000,
     action: 'quarantine',
+    quarantinePersistent: true,
+    quarantineBypassAction: 're_quarantine',
+    quarantineTimeoutMs: 60 * 60 * 1000,
     thresholds: {
       channelDelete: 3,
       channelCreate: 5,
@@ -159,6 +162,9 @@ export async function getGuildConfig(db, guildId) {
   if (!Number.isFinite(Number(config.antiNuke.windowMs))) { config.antiNuke.windowMs = d.windowMs; updated = true; }
   if (!Number.isFinite(Number(config.antiNuke.incidentWindowMs))) { config.antiNuke.incidentWindowMs = d.incidentWindowMs; updated = true; }
   if (!['alert','quarantine','ban'].includes(config.antiNuke.action)) { config.antiNuke.action = d.action; updated = true; }
+  if (typeof config.antiNuke.quarantinePersistent !== 'boolean') { config.antiNuke.quarantinePersistent = d.quarantinePersistent; updated = true; }
+  if (!['alert','re_quarantine','ban'].includes(config.antiNuke.quarantineBypassAction)) { config.antiNuke.quarantineBypassAction = d.quarantineBypassAction; updated = true; }
+  if (!Number.isFinite(Number(config.antiNuke.quarantineTimeoutMs))) { config.antiNuke.quarantineTimeoutMs = d.quarantineTimeoutMs; updated = true; }
   config.antiNuke.thresholds = { ...d.thresholds, ...(config.antiNuke.thresholds || {}) };
   config.antiNuke.protections = { ...d.protections, ...(config.antiNuke.protections || {}) };
   config.antiNuke.safeRoleIds = Array.isArray(config.antiNuke.safeRoleIds) ? config.antiNuke.safeRoleIds : [];
