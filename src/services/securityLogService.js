@@ -5,8 +5,6 @@ const TABLE_LOGS = 'security_logs';
 const TABLE_INCIDENTS = 'security_incidents';
 let schemaPromise = null;
 
-// DatabaseWrapper keeps the PostgreSQL adapter in db.db. Some callers may
-// provide the raw adapter directly, so support both shapes.
 function getPool(db) {
   return db?.pool || db?.db?.pool || null;
 }
@@ -59,16 +57,38 @@ export async function persistSecurityLog(db, record = {}) {
     const pool = getPool(db);
     if (!(await ensureSecurityTables(db)) || !pool) return false;
 
-    await pool.query(`INSERT INTO ${TABLE_LOGS}
+    const result = await pool.query(`INSERT INTO ${TABLE_LOGS}
       (guild_id, incident_id, event_type, severity, executor_id, executor_tag, target_id, target_type, audit_log_id, reason, metadata)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`, [
       record.guildId, record.incidentId || null, record.eventType || 'unknown', record.severity || 'info',
       record.executorId || null, record.executorTag || null, record.targetId || null, record.targetType || null,
       record.auditLogId || null, record.reason || null, record.metadata || {},
     ]);
-    return true;
+    return result.rows[0]?.id || false;
   } catch (error) {
     logger.error('Failed to persist security log', { error: error?.message });
+    return false;
+  }
+}
+
+export async function enrichSecurityLog(db, id, record = {}) {
+  try {
+    const pool = getPool(db);
+    if (!(await ensureSecurityTables(db)) || !pool || !id) return false;
+
+    const metadata = record.metadata || {};
+    const result = await pool.query(`UPDATE ${TABLE_LOGS}
+      SET event_type = COALESCE($2, event_type), severity = COALESCE($3, severity),
+          executor_id = COALESCE($4, executor_id), executor_tag = COALESCE($5, executor_tag),
+          audit_log_id = COALESCE($6, audit_log_id), reason = COALESCE($7, reason),
+          metadata = COALESCE(metadata, '{}'::jsonb) || $8::jsonb
+      WHERE id = $1`, [
+      id, record.eventType || null, record.severity || null, record.executorId || null,
+      record.executorTag || null, record.auditLogId || null, record.reason || null, JSON.stringify(metadata),
+    ]);
+    return result.rowCount > 0;
+  } catch (error) {
+    logger.error('Failed to enrich security log', { error: error?.message, id });
     return false;
   }
 }
