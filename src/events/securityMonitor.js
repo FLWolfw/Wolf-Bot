@@ -1,7 +1,7 @@
 import { AuditLogEvent, Events } from 'discord.js';
 import { fetchExecutor } from '../utils/auditLog.js';
 import { antiBan, antiChannelCreate, antiChannelDelete, antiRoleCreate, antiRoleDelete, cleanupAntiNukeState } from '../security/antiNuke.js';
-import { persistSecurityLog, enrichSecurityLog } from '../services/securityLogService.js';
+import { persistAuditLogEntry, persistSecurityLog, enrichSecurityLog } from '../services/securityLogService.js';
 import { logger } from '../utils/logger.js';
 
 const EVENT_CONFIG = {
@@ -12,12 +12,8 @@ const EVENT_CONFIG = {
   [Events.GuildBanAdd]: { audit: AuditLogEvent.MemberBanAdd, type: 'moderation.ban', targetType: 'user', anti: antiBan },
 };
 
-function channelMetadata(channel) {
-  return { name: channel?.name || null, id: channel?.id || null, type: channel?.type ?? null, typeName: channel?.type != null ? String(channel.type) : null, parentId: channel?.parentId || null, parentName: channel?.parent?.name || null, position: channel?.rawPosition ?? channel?.position ?? null, topic: channel?.topic || null, nsfw: channel?.nsfw ?? null, rateLimitPerUser: channel?.rateLimitPerUser ?? null, url: channel?.url || null };
-}
-function roleMetadata(role) {
-  return { name: role?.name || null, id: role?.id || null, position: role?.rawPosition ?? role?.position ?? null, color: role?.hexColor || null, hoist: role?.hoist ?? null, mentionable: role?.mentionable ?? null, managed: role?.managed ?? null, permissions: role?.permissions?.toArray?.() || [] };
-}
+function channelMetadata(channel) { return { name: channel?.name || null, id: channel?.id || null, type: channel?.type ?? null, typeName: channel?.type != null ? String(channel.type) : null, parentId: channel?.parentId || null, parentName: channel?.parent?.name || null, position: channel?.rawPosition ?? channel?.position ?? null, topic: channel?.topic || null, nsfw: channel?.nsfw ?? null, rateLimitPerUser: channel?.rateLimitPerUser ?? null, url: channel?.url || null }; }
+function roleMetadata(role) { return { name: role?.name || null, id: role?.id || null, position: role?.rawPosition ?? role?.position ?? null, color: role?.hexColor || null, hoist: role?.hoist ?? null, mentionable: role?.mentionable ?? null, managed: role?.managed ?? null, permissions: role?.permissions?.toArray?.() || [] }; }
 function targetMetadata(eventName, target) {
   if (eventName === Events.GuildRoleCreate || eventName === Events.GuildRoleDelete) return roleMetadata(target);
   if (eventName === Events.GuildBanAdd) { const user = target?.user || target; return { userId: user?.id || null, username: user?.username || null, globalName: user?.globalName || null, tag: user?.tag || null, bot: user?.bot ?? null }; }
@@ -25,52 +21,36 @@ function targetMetadata(eventName, target) {
 }
 
 async function processEvent(client, eventName, target) {
-  const guild = target?.guild;
-  if (!guild) return;
-  const cfg = EVENT_CONFIG[eventName];
-  if (!cfg) return;
+  const guild = target?.guild; if (!guild) return;
+  const cfg = EVENT_CONFIG[eventName]; if (!cfg) return;
   const targetId = target?.id || target?.user?.id || null;
-  const baseRecord = { guildId: guild.id, eventType: cfg.type, severity: 'warning', targetId, targetType: cfg.targetType, metadata: targetMetadata(eventName, target) };
-
-  // The first row is created immediately. Audit Log data enriches that same row later.
-  const logId = await persistSecurityLog(client.db, baseRecord);
+  const logId = await persistSecurityLog(client.db, { guildId: guild.id, eventType: cfg.type, severity: 'warning', targetId, targetType: cfg.targetType, metadata: targetMetadata(eventName, target) });
   if (!logId) logger.error('Security event could not be persisted', { event: cfg.type, guildId: guild.id, targetId });
-
   const resolved = await fetchExecutor(guild, cfg.audit, targetId ? { targetId } : {});
   const executor = resolved?.executor || null;
+  if (logId) await enrichSecurityLog(client.db, logId, { executorId: executor?.id || null, executorTag: executor?.tag || executor?.username || null, auditLogId: resolved?.id || null, reason: resolved?.reason || null, metadata: { executor: executor ? { id: executor.id || null, tag: executor.tag || executor.username || null, username: executor.username || null, globalName: executor.globalName || null, bot: executor.bot ?? null } : null, audit: resolved ? { id: resolved.id || null, action: resolved.action ?? null, createdTimestamp: resolved.createdTimestamp || null, reason: resolved.reason || null, targetId: resolved.targetId || targetId || null, targetName: resolved.targetName || null, changes: resolved.changes || [], options: resolved.options || null } : null, resolved: Boolean(executor) } });
+  if (cfg.anti === antiBan) await cfg.anti(guild, executor, client); else await cfg.anti(target, executor, client);
+}
 
-  if (logId) {
-    await enrichSecurityLog(client.db, logId, {
-      executorId: executor?.id || null,
-      executorTag: executor?.tag || executor?.username || null,
-      auditLogId: resolved?.id || null,
-      reason: resolved?.reason || null,
-      metadata: {
-        executor: executor ? { id: executor.id || null, tag: executor.tag || executor.username || null, username: executor.username || null, globalName: executor.globalName || null, bot: executor.bot ?? null } : null,
-        audit: resolved ? { id: resolved.id || null, action: resolved.action ?? null, createdTimestamp: resolved.createdTimestamp || null, reason: resolved.reason || null, targetId: resolved.targetId || targetId || null, targetName: resolved.targetName || null, changes: resolved.changes || [], options: resolved.options || null } : null,
-        resolved: Boolean(executor),
-      },
-    });
-  }
-
-  if (cfg.anti === antiBan) await cfg.anti(guild, executor, client);
-  else await cfg.anti(target, executor, client);
+async function processAuditEntry(entry, guild) {
+  if (!entry || !guild) return;
+  const saved = await persistAuditLogEntry(guild.client.db, entry);
+  if (!saved) logger.debug('Audit log entry could not be persisted', { guildId: guild.id, auditLogId: entry.id });
 }
 
 export function registerSecurityMonitor(client) {
   if (!client || client.__wolfSecurityMonitorRegistered) return false;
   client.__wolfSecurityMonitorRegistered = true;
-  for (const eventName of Object.keys(EVENT_CONFIG)) {
-    client.on(eventName, (target) => processEvent(client, eventName, target).catch((error) => logger.error('Security monitor failed', { event: eventName, error: error?.message })));
-  }
-  const timer = setInterval(cleanupAntiNukeState, 60_000);
-  timer.unref?.();
-  logger.info('🛡️ Wolf Security monitor registered', { events: Object.keys(EVENT_CONFIG) });
+  for (const eventName of Object.keys(EVENT_CONFIG)) client.on(eventName, (target) => processEvent(client, eventName, target).catch((error) => logger.error('Security monitor failed', { event: eventName, error: error?.message })));
+
+  // Discord emits one audit-log event for administrative actions. This gives
+  // Wolf an external copy of the full change set even when no dedicated
+  // gateway event exists for the action (webhooks, overwrites, kicks, etc.).
+  client.on(Events.GuildAuditLogEntryCreate, (entry, guild) => processAuditEntry(entry, guild).catch((error) => logger.error('Audit persistence failed', { error: error?.message })));
+
+  const timer = setInterval(cleanupAntiNukeState, 60_000); timer.unref?.();
+  logger.info('🛡️ Wolf Security monitor registered', { events: Object.keys(EVENT_CONFIG), auditLogStream: true });
   return true;
 }
 
-export default {
-  name: Events.ClientReady,
-  once: true,
-  async execute(readyClient, injectedClient) { registerSecurityMonitor(injectedClient || readyClient); },
-};
+export default { name: Events.ClientReady, once: true, async execute(readyClient, injectedClient) { registerSecurityMonitor(injectedClient || readyClient); } };
