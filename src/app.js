@@ -1,4 +1,4 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import { Client, Collection, GatewayIntentBits } from 'discord.js';
 import { REST } from '@discordjs/rest';
 import express from 'express';
@@ -14,6 +14,7 @@ import { loadCommands, registerCommands as registerSlashCommands } from './handl
 
 import { setupDashboard } from './dashboard/index.js';
 import loadEvents from './handlers/events.js';
+import { registerSecurityMonitor } from './events/securityMonitor.js';
 import { initMusic } from './services/musicService.js';
 
 class TitanBot extends Client {
@@ -61,6 +62,7 @@ class TitanBot extends Client {
 
       startupLog('Loading events...');
       await loadEvents(this);
+      registerSecurityMonitor(this);
 
       startupLog('Logging into Discord...');
       await this.login(this.config.bot.token);
@@ -73,16 +75,12 @@ class TitanBot extends Client {
       }
 
       startupLog('Registering slash commands...');
-      // A command-registration failure (e.g. Discord's 100-command cap,
-      // a transient API error) must NOT take the whole bot down — it can
-      // keep running with whatever Discord already has registered.
       try {
         await this.registerCommands();
       } catch (registerError) {
         logger.error('Slash command registration failed — continuing with previously registered commands', { error: registerError });
       }
 
-      // Banner final con resumen del estado
       printStartupBanner(
         this.user?.tag ?? 'Unknown',
         this.commands.size,
@@ -141,7 +139,6 @@ class TitanBot extends Client {
   }
 }
 
-// Capturar señales de cierre limpiamente
 process.on('SIGTERM', () => {
   shutdownLog('Received SIGTERM — shutting down gracefully');
   process.exit(0);
