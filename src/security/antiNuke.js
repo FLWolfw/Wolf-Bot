@@ -227,11 +227,19 @@ export async function antiRoleCreate(role, executor, client) {
     },
   } : {});
 }
-export async function antiRoleDelete(role, executor, client) { return handleAction('roleDelete', role.guild, executor, client); }
+export async function antiRoleDelete(role, executor, client) {
+  const config = normalizeConfig(await getGuildConfig(client.db, role.guild.id));
+  const protectedRole = config.protectedRoleIds.includes(role.id);
+  return handleAction('roleDelete', role.guild, executor, client, protectedRole ? {
+    immediate: true,
+    metadata: { protectedRole: true, roleId: role.id, roleName: role.name },
+  } : {});
+}
 export async function antiBan(guild, executor, client) { return handleAction('ban', guild, executor, client); }
 export async function antiRoleUpdate(role, executor, client) {
   if (!role?.guild) return null;
-  const protectedRole = (await getGuildConfig(client.db, role.guild.id)).antiNuke?.protectedRoleIds?.includes(role.id);
+  const config = normalizeConfig(await getGuildConfig(client.db, role.guild.id));
+  const protectedRole = config.protectedRoleIds.includes(role.id);
   const dangerous = hasDangerousPermissions(role);
   if (!protectedRole && !dangerous) return null;
   return handleAction('dangerousPermission', role.guild, executor, client, {
