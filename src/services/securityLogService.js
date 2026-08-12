@@ -5,8 +5,14 @@ const TABLE_LOGS = 'security_logs';
 const TABLE_INCIDENTS = 'security_incidents';
 let schemaPromise = null;
 
+// DatabaseWrapper keeps the PostgreSQL adapter in db.db. Some callers may
+// provide the raw adapter directly, so support both shapes.
+function getPool(db) {
+  return db?.pool || db?.db?.pool || null;
+}
+
 function available(db) {
-  return Boolean(db?.isAvailable?.() && db?.pool);
+  return Boolean(db?.isAvailable?.() && getPool(db));
 }
 
 export function makeIncidentId() {
@@ -14,39 +20,46 @@ export function makeIncidentId() {
 }
 
 export async function ensureSecurityTables(db) {
+  const pool = getPool(db);
   if (!available(db)) return false;
   if (schemaPromise) return schemaPromise;
+
   schemaPromise = (async () => {
-    await db.pool.query(`CREATE TABLE IF NOT EXISTS ${TABLE_INCIDENTS} (
+    await pool.query(`CREATE TABLE IF NOT EXISTS ${TABLE_INCIDENTS} (
       incident_id VARCHAR(64) PRIMARY KEY,
       guild_id VARCHAR(20) NOT NULL,
       executor_id VARCHAR(20), executor_tag VARCHAR(200), severity VARCHAR(20) NOT NULL,
       trigger_type VARCHAR(80) NOT NULL, action_taken VARCHAR(80), metadata JSONB DEFAULT '{}',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
-    await db.pool.query(`CREATE TABLE IF NOT EXISTS ${TABLE_LOGS} (
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS ${TABLE_LOGS} (
       id BIGSERIAL PRIMARY KEY,
       guild_id VARCHAR(20) NOT NULL, incident_id VARCHAR(64), event_type VARCHAR(100) NOT NULL,
       severity VARCHAR(20) NOT NULL, executor_id VARCHAR(20), executor_tag VARCHAR(200),
       target_id VARCHAR(30), target_type VARCHAR(50), audit_log_id VARCHAR(30), reason TEXT,
       metadata JSONB DEFAULT '{}', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
-    await db.pool.query(`CREATE INDEX IF NOT EXISTS idx_security_logs_guild_created ON ${TABLE_LOGS}(guild_id, created_at DESC)`);
-    await db.pool.query(`CREATE INDEX IF NOT EXISTS idx_security_logs_incident ON ${TABLE_LOGS}(incident_id)`);
-    await db.pool.query(`CREATE INDEX IF NOT EXISTS idx_security_incidents_guild_created ON ${TABLE_INCIDENTS}(guild_id, created_at DESC)`);
+
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_security_logs_guild_created ON ${TABLE_LOGS}(guild_id, created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_security_logs_incident ON ${TABLE_LOGS}(incident_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_security_incidents_guild_created ON ${TABLE_INCIDENTS}(guild_id, created_at DESC)`);
     return true;
   })().catch((error) => {
     schemaPromise = null;
     logger.error('Security tables initialization failed', { error: error?.message });
     return false;
   });
+
   return schemaPromise;
 }
 
 export async function persistSecurityLog(db, record = {}) {
   try {
-    if (!(await ensureSecurityTables(db))) return false;
-    await db.pool.query(`INSERT INTO ${TABLE_LOGS}
+    const pool = getPool(db);
+    if (!(await ensureSecurityTables(db)) || !pool) return false;
+
+    await pool.query(`INSERT INTO ${TABLE_LOGS}
       (guild_id, incident_id, event_type, severity, executor_id, executor_tag, target_id, target_type, audit_log_id, reason, metadata)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [
       record.guildId, record.incidentId || null, record.eventType || 'unknown', record.severity || 'info',
@@ -62,9 +75,11 @@ export async function persistSecurityLog(db, record = {}) {
 
 export async function createSecurityIncident(db, record = {}) {
   try {
-    if (!(await ensureSecurityTables(db))) return null;
+    const pool = getPool(db);
+    if (!(await ensureSecurityTables(db)) || !pool) return null;
+
     const incidentId = record.incidentId || makeIncidentId();
-    await db.pool.query(`INSERT INTO ${TABLE_INCIDENTS}
+    await pool.query(`INSERT INTO ${TABLE_INCIDENTS}
       (incident_id, guild_id, executor_id, executor_tag, severity, trigger_type, action_taken, metadata)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       ON CONFLICT (incident_id) DO UPDATE SET metadata = ${TABLE_INCIDENTS}.metadata || EXCLUDED.metadata`, [
@@ -80,12 +95,16 @@ export async function createSecurityIncident(db, record = {}) {
 
 export async function listSecurityLogs(db, guildId, limit = 100) {
   if (!(await ensureSecurityTables(db))) return [];
-  const result = await db.pool.query(`SELECT * FROM ${TABLE_LOGS} WHERE guild_id = $1 ORDER BY created_at DESC LIMIT $2`, [guildId, Math.min(Number(limit) || 100, 500)]);
+  const pool = getPool(db);
+  if (!pool) return [];
+  const result = await pool.query(`SELECT * FROM ${TABLE_LOGS} WHERE guild_id = $1 ORDER BY created_at DESC LIMIT $2`, [guildId, Math.min(Number(limit) || 100, 500)]);
   return result.rows;
 }
 
 export async function listSecurityIncidents(db, guildId, limit = 50) {
   if (!(await ensureSecurityTables(db))) return [];
-  const result = await db.pool.query(`SELECT * FROM ${TABLE_INCIDENTS} WHERE guild_id = $1 ORDER BY created_at DESC LIMIT $2`, [guildId, Math.min(Number(limit) || 50, 200)]);
+  const pool = getPool(db);
+  if (!pool) return [];
+  const result = await pool.query(`SELECT * FROM ${TABLE_INCIDENTS} WHERE guild_id = $1 ORDER BY created_at DESC LIMIT $2`, [guildId, Math.min(Number(limit) || 50, 200)]);
   return result.rows;
 }
