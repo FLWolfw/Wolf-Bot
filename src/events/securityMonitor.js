@@ -1,7 +1,7 @@
 import { AuditLogEvent, Events } from 'discord.js';
 import { fetchExecutor } from '../utils/auditLog.js';
 import { antiBan, antiChannelCreate, antiChannelDelete, antiRoleCreate, antiRoleDelete, cleanupAntiNukeState } from '../security/antiNuke.js';
-import { persistSecurityLog } from '../services/securityLogService.js';
+import { persistSecurityLog, enrichSecurityLog } from '../services/securityLogService.js';
 import { logger } from '../utils/logger.js';
 
 const EVENT_CONFIG = {
@@ -12,6 +12,50 @@ const EVENT_CONFIG = {
   [Events.GuildBanAdd]: { audit: AuditLogEvent.MemberBanAdd, type: 'moderation.ban', targetType: 'user', anti: antiBan },
 };
 
+function channelMetadata(channel) {
+  return {
+    name: channel?.name || null,
+    id: channel?.id || null,
+    type: channel?.type ?? null,
+    typeName: channel?.type != null ? String(channel.type) : null,
+    parentId: channel?.parentId || null,
+    parentName: channel?.parent?.name || null,
+    position: channel?.rawPosition ?? channel?.position ?? null,
+    topic: channel?.topic || null,
+    nsfw: channel?.nsfw ?? null,
+    rateLimitPerUser: channel?.rateLimitPerUser ?? null,
+    url: channel?.url || null,
+  };
+}
+
+function roleMetadata(role) {
+  return {
+    name: role?.name || null,
+    id: role?.id || null,
+    position: role?.rawPosition ?? role?.position ?? null,
+    color: role?.hexColor || null,
+    hoist: role?.hoist ?? null,
+    mentionable: role?.mentionable ?? null,
+    managed: role?.managed ?? null,
+    permissions: role?.permissions?.toArray?.() || [],
+  };
+}
+
+function targetMetadata(eventName, target) {
+  if (eventName === Events.GuildRoleCreate || eventName === Events.GuildRoleDelete) return roleMetadata(target);
+  if (eventName === Events.GuildBanAdd) {
+    const user = target?.user || target;
+    return {
+      userId: user?.id || null,
+      username: user?.username || null,
+      globalName: user?.globalName || null,
+      tag: user?.tag || null,
+      bot: user?.bot ?? null,
+    };
+  }
+  return channelMetadata(target);
+}
+
 async function processEvent(client, eventName, target) {
   const guild = target?.guild;
   if (!guild) return;
@@ -19,32 +63,50 @@ async function processEvent(client, eventName, target) {
   if (!cfg) return;
 
   const targetId = target?.id || target?.user?.id || null;
+  const metadata = targetMetadata(eventName, target);
   const baseRecord = {
     guildId: guild.id,
     eventType: cfg.type,
     severity: 'warning',
     targetId,
     targetType: cfg.targetType,
-    metadata: { name: target?.name || target?.user?.tag || null },
+    metadata,
   };
 
-  // Persist first. Audit Log resolution is enrichment, never a prerequisite.
-  const saved = await persistSecurityLog(client.db, baseRecord);
-  if (!saved) {
+  // Save immediately. Audit Log resolution is enrichment, never a prerequisite.
+  const logId = await persistSecurityLog(client.db, baseRecord);
+  if (!logId) {
     logger.error('Security event could not be persisted', { event: cfg.type, guildId: guild.id, targetId });
   }
 
   const resolved = await fetchExecutor(guild, cfg.audit, targetId ? { targetId } : {});
   const executor = resolved?.executor || null;
 
-  if (executor) {
-    await persistSecurityLog(client.db, {
-      ...baseRecord,
-      eventType: `${cfg.type}.resolved`,
+  if (logId && executor) {
+    await enrichSecurityLog(client.db, logId, {
       executorId: executor.id || null,
       executorTag: executor.tag || executor.username || null,
       auditLogId: resolved.id || null,
       reason: resolved.reason || null,
+      metadata: {
+        executor: {
+          id: executor.id || null,
+          tag: executor.tag || executor.username || null,
+          username: executor.username || null,
+          bot: executor.bot ?? null,
+        },
+        audit: {
+          id: resolved.id || null,
+          action: resolved.action ?? null,
+          createdTimestamp: resolved.createdTimestamp || null,
+          reason: resolved.reason || null,
+        },
+        resolved: true,
+      },
+    });
+  } else if (logId) {
+    await enrichSecurityLog(client.db, logId, {
+      metadata: { resolved: false, executor: null },
     });
   }
 
