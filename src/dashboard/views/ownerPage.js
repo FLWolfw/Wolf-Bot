@@ -53,6 +53,16 @@ export function renderOwner({ user, client, approved, csrf, flash }) {
     <div class="stat"><div class="label">Bloqueados</div><div class="value">${guilds.length - approvedCount}</div></div>
   </div>
 
+  <div class="card" style="margin-bottom:18px">
+    <div class="row" style="justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+      <div>
+        <h2 style="margin:0">🗄️ Security Vault</h2>
+        <p class="hint" style="margin-bottom:0">Archivo privado del dueño con logs e incidentes de todos los servidores. Se conserva en PostgreSQL aunque un servidor sea eliminado o Wolf sea expulsado.</p>
+      </div>
+      <a class="button" href="/admin/security">Abrir Security Vault</a>
+    </div>
+  </div>
+
   <div class="servers" style="grid-template-columns:1fr">${rows}</div>`;
 
   return appShell({ title: 'Panel del dueño', user, active: 'admin', flash, body });
