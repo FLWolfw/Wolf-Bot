@@ -6,11 +6,13 @@ import { manageableGuilds } from '../lib/oauth.js';
 import { requireLogin, makeRequireGuildAdmin, requireOwner } from '../middleware/auth.js';
 import { listAccess } from '../../services/accessService.js';
 import { listSecurityIncidents, listSecurityLogs, listOwnerSecurityIncidents, listOwnerSecurityLogs, listOwnerSecurityGuilds } from '../../services/securityLogService.js';
+import { listUserIdentities } from '../../services/userIdentityService.js';
 import { renderLanding } from '../views/landing.js';
 import { renderDashboard } from '../views/dashboardPage.js';
 import { renderServer } from '../views/serverPage.js';
 import { renderOwner } from '../views/ownerPage.js';
 import { renderOwnerSecurity } from '../views/ownerSecurityPage.js';
+import { renderOwnerIdentity } from '../views/ownerIdentityPage.js';
 import { renderTerms, renderPrivacy } from '../views/legal.js';
 import { renderCommands } from '../views/commandsPage.js';
 import { renderSecurity } from '../views/securityPage.js';
@@ -65,6 +67,17 @@ export function pageRoutes(client) {
     } catch (err) {
       logger.error('Owner Security Vault failed', { error: err?.message });
       res.status(500).send('Error cargando el Security Vault.');
+    }
+  });
+
+  router.get('/admin/identities', requireLogin, requireOwner, async (req, res) => {
+    try {
+      const search = String(req.query.q || '').trim().slice(0, 100);
+      const profiles = await listUserIdentities(client.db, search, 100);
+      res.send(renderOwnerIdentity({ user: req.session.user, profiles, search }));
+    } catch (err) {
+      logger.error('Owner identity history failed', { error: err?.message });
+      res.status(500).send('Error cargando el historial de identidades.');
     }
   });
 
