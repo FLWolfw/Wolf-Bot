@@ -1,6 +1,7 @@
 import { Events } from 'discord.js';
 
 import { getGuildConfig } from '../services/guildConfigService.js';
+import { recordUserIdentity } from '../services/userIdentityService.js';
 
 import {
   getServerCounters,
@@ -21,14 +22,17 @@ export default {
     try {
       const { guild, user } = member;
 
+      await recordUserIdentity(member.client.db, {
+        user,
+        guildId: guild.id,
+        guildName: guild.name,
+        reason: 'guild_member_join',
+      });
+
       const config = await getGuildConfig(
         member.client.db,
         guild.id
       );
-
-      // =====================================
-      // 👋 WELCOME
-      // =====================================
 
       if (config.welcome?.enabled) {
         let channel = null;
@@ -83,12 +87,6 @@ export default {
         }
       }
 
-      // Member-join logging is handled by src/events/logs/guildMemberAdd.js
-
-      // =====================================
-      // 📈 CONTADORES
-      // =====================================
-
       try {
         const counters = await getServerCounters(
           member.client,
@@ -113,10 +111,6 @@ export default {
       } catch (error) {
         logger.debug('Error counters:', error);
       }
-
-      // =====================================
-      // 🎂 BIRTHDAY
-      // =====================================
 
       try {
         const backupKey =
