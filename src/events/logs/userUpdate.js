@@ -2,6 +2,7 @@ import { Events } from 'discord.js';
 import { getGuildConfig } from '../../services/guildConfigService.js';
 import { isEventEnabled } from '../../services/loggingService.js';
 import { createLogEmbed } from '../../utils/logEmbed.js';
+import { recordUserIdentity } from '../../services/userIdentityService.js';
 
 export default {
   name: Events.UserUpdate,
@@ -19,6 +20,19 @@ export default {
 
     for (const [, guild] of guilds) {
       try {
+        await recordUserIdentity(client.db, {
+          user: newUser,
+          previous: {
+            username: oldUser.username || null,
+            globalName: oldUser.globalName || null,
+            avatar: oldUser.displayAvatarURL({ dynamic: true, size: 256 }),
+            avatarHash: oldUser.avatar || null,
+          },
+          guildId: guild.id,
+          guildName: guild.name,
+          reason: 'discord_user_update',
+        });
+
         const config = await getGuildConfig(client.db, guild.id);
         if (!isEventEnabled(config, 'member.namechange')) continue;
 
