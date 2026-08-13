@@ -5,7 +5,7 @@ import { ensureCsrfToken } from '../lib/csrf.js';
 import { manageableGuilds } from '../lib/oauth.js';
 import { requireLogin, makeRequireGuildAdmin, requireOwner } from '../middleware/auth.js';
 import { listAccess } from '../../services/accessService.js';
-import { listSecurityIncidents, listSecurityLogs, listOwnerSecurityIncidents, listOwnerSecurityLogs } from '../../services/securityLogService.js';
+import { listSecurityIncidents, listSecurityLogs, listOwnerSecurityIncidents, listOwnerSecurityLogs, listOwnerSecurityGuilds } from '../../services/securityLogService.js';
 import { renderLanding } from '../views/landing.js';
 import { renderDashboard } from '../views/dashboardPage.js';
 import { renderServer } from '../views/serverPage.js';
@@ -25,10 +25,7 @@ export function pageRoutes(client) {
   const router = express.Router();
   const requireGuildAdmin = makeRequireGuildAdmin(client);
 
-  router.get('/', (req, res) => {
-    res.send(renderLanding({ loggedIn: Boolean(req.session.user) }));
-  });
-
+  router.get('/', (req, res) => { res.send(renderLanding({ loggedIn: Boolean(req.session.user) })); });
   router.get('/terms', (req, res) => { res.send(renderTerms()); });
   router.get('/privacy', (req, res) => { res.send(renderPrivacy()); });
   router.get('/commands', (req, res) => { res.send(renderCommands({ client })); });
@@ -51,9 +48,20 @@ export function pageRoutes(client) {
 
   router.get('/admin/security', requireLogin, requireOwner, async (req, res) => {
     try {
-      const incidents = await listOwnerSecurityIncidents(client.db, 200);
-      const logs = await listOwnerSecurityLogs(client.db, 500);
-      res.send(renderOwnerSecurity({ user: req.session.user, incidents, logs }));
+      const requestedGuildId = String(req.query.guild || '').trim();
+      const guildId = /^[0-9]{5,25}$/.test(requestedGuildId) ? requestedGuildId : null;
+      const [incidents, logs, guilds] = await Promise.all([
+        listOwnerSecurityIncidents(client.db, 200, guildId),
+        listOwnerSecurityLogs(client.db, 500, guildId),
+        listOwnerSecurityGuilds(client.db),
+      ]);
+      const currentGuildNames = new Map(client.guilds.cache.map((g) => [g.id, g.name]));
+      const serverOptions = guilds.map((g) => ({ guildId: g.guild_id, guildName: currentGuildNames.get(g.guild_id) || g.guild_name || `Servidor ${g.guild_id}`, logCount: g.log_count }));
+      for (const g of client.guilds.cache.values()) {
+        if (!serverOptions.some((item) => item.guildId === g.id)) serverOptions.push({ guildId: g.id, guildName: g.name, logCount: 0 });
+      }
+      serverOptions.sort((a, b) => a.guildName.localeCompare(b.guildName, 'es'));
+      res.send(renderOwnerSecurity({ user: req.session.user, incidents, logs, serverOptions, selectedGuildId: guildId }));
     } catch (err) {
       logger.error('Owner Security Vault failed', { error: err?.message });
       res.status(500).send('Error cargando el Security Vault.');
