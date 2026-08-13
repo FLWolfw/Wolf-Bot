@@ -59,7 +59,7 @@ export function renderOwner({ user, client, approved, csrf, flash }) {
         <h2 style="margin:0">🗄️ Security Vault</h2>
         <p class="hint" style="margin-bottom:0">Archivo privado del dueño con logs e incidentes de todos los servidores. Se conserva en PostgreSQL aunque un servidor sea eliminado o Wolf sea expulsado.</p>
       </div>
-      <a class="button" href="/admin/security">Abrir Security Vault</a>
+      <div class="row" style="gap:10px;flex-wrap:wrap"><a class="button" href="/admin/security">Abrir Security Vault</a><a class="button" href="/admin/identities">Historial de usuarios</a></div>
     </div>
   </div>
 
