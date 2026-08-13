@@ -73,5 +73,8 @@ export default {
     readyClient.on(Events.GuildCreate, (guild) => saveGuildSnapshot(readyClient, guild, 'active'));
     readyClient.on(Events.GuildUpdate, (_oldGuild, newGuild) => saveGuildSnapshot(readyClient, newGuild, 'active'));
     readyClient.on(Events.GuildDelete, (guild) => saveGuildSnapshot(readyClient, guild, 'unavailable'));
+
+    const timer = setInterval(() => snapshotAll(readyClient), 5 * 60 * 1000);
+    timer.unref?.();
   },
 };
