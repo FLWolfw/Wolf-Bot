@@ -26,7 +26,11 @@ export async function ensureSecurityTables(db) {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_security_incidents_guild_created ON ${TABLE_INCIDENTS}(guild_id, created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_owner_security_logs_guild_created ON ${TABLE_OWNER_LOGS}(guild_id, created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_owner_security_logs_incident ON ${TABLE_OWNER_LOGS}(incident_id)`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_security_logs_source ON ${TABLE_OWNER_LOGS}(source_log_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_owner_security_incidents_guild_created ON ${TABLE_OWNER_INCIDENTS}(guild_id, created_at DESC)`);
+    // Backfill the owner archive once from the existing guild-scoped security history.
+    await pool.query(`INSERT INTO ${TABLE_OWNER_INCIDENTS} (incident_id, guild_id, guild_name, executor_id, executor_tag, severity, trigger_type, action_taken, metadata, created_at) SELECT incident_id, guild_id, NULL, executor_id, executor_tag, severity, trigger_type, action_taken, metadata, created_at FROM ${TABLE_INCIDENTS} ON CONFLICT (incident_id) DO NOTHING`);
+    await pool.query(`INSERT INTO ${TABLE_OWNER_LOGS} (source_log_id, guild_id, guild_name, incident_id, event_type, severity, executor_id, executor_tag, target_id, target_type, audit_log_id, reason, metadata, created_at) SELECT id, guild_id, NULL, incident_id, event_type, severity, executor_id, executor_tag, target_id, target_type, audit_log_id, reason, metadata, created_at FROM ${TABLE_LOGS} ON CONFLICT (source_log_id) DO NOTHING`);
     return true;
   })().catch((error) => { schemaPromise = null; logger.error('Security tables initialization failed', { error: error?.message }); return false; });
   return schemaPromise;
@@ -34,7 +38,7 @@ export async function ensureSecurityTables(db) {
 
 async function mirrorOwnerLog(pool, sourceLogId, record) {
   try {
-    await pool.query(`INSERT INTO ${TABLE_OWNER_LOGS} (source_log_id, guild_id, guild_name, incident_id, event_type, severity, executor_id, executor_tag, target_id, target_type, audit_log_id, reason, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [sourceLogId, record.guildId, record.guildName || record.metadata?.guildName || null, record.incidentId || null, record.eventType || 'unknown', record.severity || 'info', record.executorId || null, record.executorTag || null, record.targetId || null, record.targetType || null, record.auditLogId || null, record.reason || null, record.metadata || {}]);
+    await pool.query(`INSERT INTO ${TABLE_OWNER_LOGS} (source_log_id, guild_id, guild_name, incident_id, event_type, severity, executor_id, executor_tag, target_id, target_type, audit_log_id, reason, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (source_log_id) DO UPDATE SET guild_name = COALESCE(EXCLUDED.guild_name, ${TABLE_OWNER_LOGS}.guild_name), incident_id = COALESCE(EXCLUDED.incident_id, ${TABLE_OWNER_LOGS}.incident_id), executor_id = COALESCE(EXCLUDED.executor_id, ${TABLE_OWNER_LOGS}.executor_id), executor_tag = COALESCE(EXCLUDED.executor_tag, ${TABLE_OWNER_LOGS}.executor_tag), metadata = COALESCE(${TABLE_OWNER_LOGS}.metadata, '{}'::jsonb) || EXCLUDED.metadata`, [sourceLogId, record.guildId, record.guildName || record.metadata?.guildName || null, record.incidentId || null, record.eventType || 'unknown', record.severity || 'info', record.executorId || null, record.executorTag || null, record.targetId || null, record.targetType || null, record.auditLogId || null, record.reason || null, record.metadata || {}]);
   } catch (error) { logger.error('Failed to mirror security log to owner archive', { error: error?.message, guildId: record.guildId, sourceLogId }); }
 }
 
