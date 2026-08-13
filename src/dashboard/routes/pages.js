@@ -5,11 +5,12 @@ import { ensureCsrfToken } from '../lib/csrf.js';
 import { manageableGuilds } from '../lib/oauth.js';
 import { requireLogin, makeRequireGuildAdmin, requireOwner } from '../middleware/auth.js';
 import { listAccess } from '../../services/accessService.js';
-import { listSecurityIncidents, listSecurityLogs } from '../../services/securityLogService.js';
+import { listSecurityIncidents, listSecurityLogs, listOwnerSecurityIncidents, listOwnerSecurityLogs } from '../../services/securityLogService.js';
 import { renderLanding } from '../views/landing.js';
 import { renderDashboard } from '../views/dashboardPage.js';
 import { renderServer } from '../views/serverPage.js';
 import { renderOwner } from '../views/ownerPage.js';
+import { renderOwnerSecurity } from '../views/ownerSecurityPage.js';
 import { renderTerms, renderPrivacy } from '../views/legal.js';
 import { renderCommands } from '../views/commandsPage.js';
 import { renderSecurity } from '../views/securityPage.js';
@@ -45,6 +46,17 @@ export function pageRoutes(client) {
     } catch (err) {
       logger.error('Owner panel failed', { error: err?.message });
       res.status(500).send('Error cargando el panel del dueño.');
+    }
+  });
+
+  router.get('/admin/security', requireLogin, requireOwner, async (req, res) => {
+    try {
+      const incidents = await listOwnerSecurityIncidents(client.db, 200);
+      const logs = await listOwnerSecurityLogs(client.db, 500);
+      res.send(renderOwnerSecurity({ user: req.session.user, incidents, logs }));
+    } catch (err) {
+      logger.error('Owner Security Vault failed', { error: err?.message });
+      res.status(500).send('Error cargando el Security Vault.');
     }
   });
 
